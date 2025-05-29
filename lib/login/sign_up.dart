@@ -18,7 +18,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   Future<void> _registerUser() async {
     final url = Uri.parse(
-      'http://127.0.0.1:8080/api/login',
+      'http://127.0.0.1:8000/api/register',
     ); // Ganti dengan URL API kamu
 
     if (_usernameController.text.isEmpty ||

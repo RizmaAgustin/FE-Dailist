@@ -5,6 +5,7 @@ import '/screen/home.dart';
 import 'sign_up.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -18,6 +19,23 @@ class _SignInPageState extends State<SignInPage> {
   final TextEditingController passwordController = TextEditingController();
   bool obscurePassword = true;
   bool isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    checkLoginStatus();
+  }
+
+  Future<void> checkLoginStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString('token');
+    if (token != null && token.isNotEmpty) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomePage()),
+      );
+    }
+  }
 
   Color _getBackgroundColor(BuildContext context) {
     return context.watch<ThemeProvider>().currentTheme == ThemeMode.light
@@ -48,13 +66,20 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
+    // Validasi format email sederhana
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Format email tidak valid')));
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
-    final url = Uri.parse(
-      'http://127.0.0.1:8000/api/login',
-    ); // Ganti dengan URL Laravel-mu
+    final url = Uri.parse('http://127.0.0.1:8000/api/login');
 
     try {
       final response = await http.post(
@@ -69,13 +94,14 @@ class _SignInPageState extends State<SignInPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final token = data['token']; // pastikan key ini benar sesuai API
 
-        // Ambil token dari response Laravel
-        final token = data['token'];
         if (token != null) {
-          // TODO: Simpan token di secure storage atau shared preferences jika perlu
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          await prefs.setString('token', token);
+          await prefs.setString('email', email);
 
-          // Pindah ke HomePage
+          if (!mounted) return;
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const HomePage()),
@@ -230,7 +256,7 @@ class _SignInPageState extends State<SignInPage> {
                 children: [
                   TextButton(
                     onPressed: () {
-                      // TODO: Tambahkan logika lupa password di sini
+                      // Tambahkan logika lupa password
                     },
                     child: const Text(
                       'Lupa Password?',

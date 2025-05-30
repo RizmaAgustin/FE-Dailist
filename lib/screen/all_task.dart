@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'add_task.dart';
-import '../theme/theme_provider.dart'; // Pastikan path provider benar
+import '../theme/theme_provider.dart';
 
 class AllTasksScreen extends StatefulWidget {
   const AllTasksScreen({super.key});
@@ -18,15 +21,12 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
     final isDark = themeProvider.currentTheme == ThemeMode.dark;
     final iconColor = isDark ? Colors.white : Colors.black;
     final backgroundColor =
-        isDark
-            ? const Color(0xFF303030)
-            : const Color(0xFFEDF7FE); // Warna biru muda dari HomePage
+        isDark ? const Color(0xFF303030) : const Color(0xFFEDF7FE);
 
     return Scaffold(
-      backgroundColor: backgroundColor, // Set warna latar belakang di Scaffold
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor:
-            backgroundColor, // Samakan warna AppBar dengan background
+        backgroundColor: backgroundColor,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: iconColor),
@@ -53,13 +53,17 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
           ),
         ],
       ),
-      body: _AllTasksContent(), // Langsung tampilkan konten
+      body: const _AllTasksContent(),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AddTaskScreen()),
           );
+          // Refresh tasks after returning
+          _AllTasksContentState? state =
+              _AllTasksContent.globalKey.currentState;
+          state?.fetchTasks();
         },
         backgroundColor: const Color(0xFF2196F3),
         shape: const CircleBorder(),
@@ -69,85 +73,222 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
   }
 }
 
-class _AllTasksContent extends StatelessWidget {
+class Task {
+  final int id; // assuming each task has an id for update
+  final String title;
+  final DateTime? dueDate;
+  final bool isCompleted;
+
+  Task({
+    required this.id,
+    required this.title,
+    this.dueDate,
+    required this.isCompleted,
+  });
+
+  factory Task.fromJson(Map<String, dynamic> json) {
+    return Task(
+      id: json['id'] ?? 0,
+      title: json['title'] ?? 'No Title',
+      dueDate:
+          json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
+      isCompleted: json['is_completed'] == 1,
+    );
+  }
+}
+
+class _AllTasksContent extends StatefulWidget {
+  const _AllTasksContent({Key? key}) : super(key: key);
+
+  static final globalKey = GlobalKey<_AllTasksContentState>();
+
+  @override
+  State<_AllTasksContent> createState() => _AllTasksContentState();
+}
+
+class _AllTasksContentState extends State<_AllTasksContent> {
+  List<Task> tasks = [];
+  bool isLoading = true;
+  String errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchTasks();
+  }
+
+  Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<void> fetchTasks() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+    });
+
+    final url = Uri.parse('http://127.0.0.1:8000/api/tasks');
+
+    final token = await getToken();
+
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        setState(() {
+          tasks = data.map((json) => Task.fromJson(json)).toList();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          errorMessage =
+              'Failed to load tasks. Status code: ${response.statusCode}';
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error fetching tasks: $e';
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> toggleTaskCompletion(Task task) async {
+    final url = Uri.parse(
+      'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
+    ); // contoh endpoint
+    final token = await getToken();
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        // Update local state dengan fetch ulang
+        await fetchTasks();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal update status tugas.')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error saat update status: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.currentTheme == ThemeMode.dark;
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
+    if (isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(errorMessage),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: fetchTasks,
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final now = DateTime.now();
+    final lateTasks =
+        tasks
+            .where(
+              (t) =>
+                  !t.isCompleted &&
+                  t.dueDate != null &&
+                  t.dueDate!.isBefore(now),
+            )
+            .toList();
+    final priorityTasks =
+        tasks
+            .where(
+              (t) =>
+                  !t.isCompleted &&
+                  (t.dueDate == null || !t.dueDate!.isBefore(now)),
+            )
+            .toList();
+    final completedTasks = tasks.where((t) => t.isCompleted).toList();
+
     return SafeArea(
       child: ListView(
         children: [
-          _TaskSection(
-            title: 'Terlambat',
-            color: Colors.orange,
-            isDark: isDark,
-            cardColor: cardColor,
-            tasks: [
-              TaskItem(
-                title: 'Pengumpulan Draft',
-                dueDate: DateTime(2025, 4, 7),
-                trailingIcon: Icons.edit_outlined,
-              ),
-            ],
-          ),
-          _TaskSection(
-            title: 'Tugas Prioritas',
-            color: Colors.blue,
-            isDark: isDark,
-            cardColor: cardColor,
-            tasks: [
-              TaskItem(
-                title: 'Project Akhir Mobile',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.edit_outlined,
-              ),
-              TaskItem(
-                title: 'Project UTS',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.edit_outlined,
-              ),
-            ],
-          ),
-          _TaskSection(
-            title: 'Tugas Lainnya',
-            color: Colors.grey,
-            isDark: isDark,
-            cardColor: cardColor,
-            tasks: [
-              TaskItem(
-                title: 'Liburan Semester',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.edit_outlined,
-              ),
-              TaskItem(
-                title: 'Kasih Makan Kucing',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.edit_outlined,
-              ),
-            ],
-          ),
-          _TaskSection(
-            title: 'Tugas Selesai',
-            color: Colors.green,
-            isDark: isDark,
-            cardColor: cardColor,
-            tasks: [
-              TaskItem(
-                title: 'Tugas Artikel',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.delete_outline,
-                isCompleted: true,
-              ),
-              TaskItem(
-                title: 'Artikel Metode Penelitian',
-                dueDate: DateTime(2025, 4, 22),
-                trailingIcon: Icons.delete_outline,
-                isCompleted: true,
-              ),
-            ],
-          ),
+          if (lateTasks.isNotEmpty)
+            _TaskSection(
+              title: 'Terlambat',
+              color: Colors.orange,
+              isDark: isDark,
+              cardColor: cardColor,
+              tasks:
+                  lateTasks
+                      .map(
+                        (t) => TaskItem(
+                          task: t,
+                          onToggleCompleted: () => toggleTaskCompletion(t),
+                        ),
+                      )
+                      .toList(),
+            ),
+          if (priorityTasks.isNotEmpty)
+            _TaskSection(
+              title: 'Tugas Prioritas',
+              color: Colors.blue,
+              isDark: isDark,
+              cardColor: cardColor,
+              tasks:
+                  priorityTasks
+                      .map(
+                        (t) => TaskItem(
+                          task: t,
+                          onToggleCompleted: () => toggleTaskCompletion(t),
+                        ),
+                      )
+                      .toList(),
+            ),
+          if (completedTasks.isNotEmpty)
+            _TaskSection(
+              title: 'Tugas Selesai',
+              color: Colors.green,
+              isDark: isDark,
+              cardColor: cardColor,
+              tasks:
+                  completedTasks
+                      .map(
+                        (t) => TaskItem(
+                          task: t,
+                          onToggleCompleted: () => toggleTaskCompletion(t),
+                        ),
+                      )
+                      .toList(),
+            ),
         ],
       ),
     );
@@ -172,80 +313,52 @@ class _TaskSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
+      padding: const EdgeInsets.only(top: 20, left: 15, right: 15),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 16.0, bottom: 8.0),
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+          Text(
+            title,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
             ),
           ),
-          ...tasks.map((task) => task.buildCard(cardColor, isDark)).toList(),
+          const SizedBox(height: 8),
+          ...tasks,
         ],
       ),
     );
   }
 }
 
-class TaskItem {
-  final String title;
-  final DateTime? dueDate;
-  final IconData? trailingIcon;
-  final bool isCompleted;
+class TaskItem extends StatelessWidget {
+  final Task task;
+  final VoidCallback onToggleCompleted;
 
-  const TaskItem({
-    required this.title,
-    this.dueDate,
-    this.trailingIcon,
-    this.isCompleted = false,
-  });
+  const TaskItem({required this.task, required this.onToggleCompleted});
 
-  Widget buildCard(Color cardColor, bool isDark) {
-    final formattedDate =
-        dueDate != null
-            ? DateFormat('EEEE, d MMMM y', 'id_ID').format(dueDate!)
-            : '';
-    final textColor = isDark ? Colors.white : Colors.black87;
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dueDateText =
+        task.dueDate != null ? dateFormat.format(task.dueDate!) : '-';
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 16.0),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
       child: ListTile(
-        leading: Icon(
-          isCompleted ? Icons.check_circle : Icons.circle_outlined,
-          color: isCompleted ? Colors.green : Colors.grey,
+        leading: Checkbox(
+          value: task.isCompleted,
+          onChanged: (_) => onToggleCompleted(),
         ),
         title: Text(
-          title,
+          task.title,
           style: TextStyle(
-            fontSize: 16,
-            color: textColor,
-            decoration: isCompleted ? TextDecoration.lineThrough : null,
+            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
           ),
         ),
-        subtitle:
-            dueDate != null
-                ? Text(
-                  formattedDate,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                )
-                : null,
-        trailing: Icon(
-          trailingIcon,
-          color: isDark ? Colors.grey[400] : Colors.grey[600],
-        ),
+        subtitle: Text('Deadline: $dueDateText'),
       ),
     );
   }

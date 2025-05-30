@@ -128,7 +128,9 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       errorMessage = '';
     });
 
-    final url = Uri.parse('http://127.0.0.1:8000/api/tasks');
+    final url = Uri.parse(
+      'http://127.0.0.1:8000/api/tasks?email=rizmaagustin66@gmail.com',
+    );
 
     final token = await getToken();
 

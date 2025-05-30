@@ -1,14 +1,16 @@
-import 'package:dailist/screen/calender.dart';
 import 'package:flutter/material.dart';
-import 'all_task.dart';
-import 'setting.dart';
-import 'home.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'all_task.dart';
+import 'calender.dart';
+import 'setting.dart';
 
 class AddTaskScreen extends StatefulWidget {
-  const AddTaskScreen({super.key});
+  final Task? taskToEdit;
+
+  const AddTaskScreen({super.key, this.taskToEdit});
 
   @override
   State<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -16,22 +18,35 @@ class AddTaskScreen extends StatefulWidget {
 
 class _AddTaskScreenState extends State<AddTaskScreen> {
   final _formKey = GlobalKey<FormState>();
-
   final _judulController = TextEditingController();
   final _catatanController = TextEditingController();
 
   String? _kategori;
-  String? _prioritas; // Ubah controller jadi String? untuk dropdown
+  String? _prioritas;
   DateTime? _tanggal;
   TimeOfDay? _waktu;
   bool _aturPengingat = false;
+  bool _isCompleted = false;
   int _selectedIndex = 0;
 
-  final int userId = 1; // contoh userId, sesuaikan
+  final int userId = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.taskToEdit != null) {
+      _judulController.text = widget.taskToEdit!.title;
+      _isCompleted = widget.taskToEdit!.isCompleted;
+      if (widget.taskToEdit!.dueDate != null) {
+        _tanggal = widget.taskToEdit!.dueDate;
+        _waktu = TimeOfDay.fromDateTime(widget.taskToEdit!.dueDate!);
+      }
+    }
+  }
 
   void _onItemTapped(int index) {
     final pages = [
-      const HomePage(),
+      const AddTaskScreen(),
       const AllTasksScreen(),
       const CalendarScreen(),
       const SettingsScreen(),
@@ -43,11 +58,11 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   Future<String?> getToken() async {
-    // Gantilah dengan token valid milikmu (bisa simpan di secure storage)
-    return '69|gKFfIeRmoOWL9YnAGWCQFUc6sSCr0vqUA3p2a9xU9280832d';
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
   }
 
-  Future<bool> addTask() async {
+  Future<bool> saveTask() async {
     if (_tanggal == null || _waktu == null) return false;
 
     final deadline = DateTime(
@@ -58,9 +73,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _waktu!.minute,
     );
 
-    final url = Uri.parse(
-      'http://127.0.0.1:8000/api/tasks',
-    ); // URL API Laravel-mu
+    final url =
+        widget.taskToEdit == null
+            ? Uri.parse('http://127.0.0.1:8000/api/tasks')
+            : Uri.parse(
+              'http://127.0.0.1:8000/api/tasks/${widget.taskToEdit!.id}',
+            );
+
     final token = await getToken();
 
     final body = {
@@ -71,25 +90,37 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       'priority': _prioritas ?? '',
       'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
       'reminder': _aturPengingat ? '1' : '0',
+      'is_completed': _isCompleted ? '1' : '0',
     };
 
     try {
-      final response = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(body),
-      );
+      final response =
+          widget.taskToEdit == null
+              ? await http.post(
+                url,
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                },
+                body: json.encode(body),
+              )
+              : await http.put(
+                url,
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                },
+                body: json.encode(body),
+              );
 
       debugPrint('STATUS CODE: ${response.statusCode}');
       debugPrint('RESPONSE BODY: ${response.body}');
 
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      debugPrint('Error adding task: $e');
+      debugPrint('Error saving task: $e');
       return false;
     }
   }
@@ -110,20 +141,23 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       return;
     }
 
-    final success = await addTask();
+    final success = await saveTask();
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Tugas berhasil ditambahkan!')),
+        SnackBar(
+          content: Text(
+            widget.taskToEdit == null
+                ? 'Tugas berhasil ditambahkan!'
+                : 'Tugas berhasil diperbarui!',
+          ),
+        ),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AllTasksScreen()),
-      );
+      Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Gagal menambahkan tugas.')));
+      ).showSnackBar(const SnackBar(content: Text('Gagal menyimpan tugas.')));
     }
   }
 
@@ -188,6 +222,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           icon: Icon(Icons.arrow_back, color: textColor),
           onPressed: () => Navigator.pop(context),
         ),
+        title: Text(
+          widget.taskToEdit == null ? 'Tambah Tugas' : 'Edit Tugas',
+          style: TextStyle(color: textColor),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -227,6 +265,15 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               _buildDatePicker(),
               const SizedBox(height: 8),
               _buildTimePicker(),
+
+              const SizedBox(height: 16),
+              _buildLabel('Status :', textColor),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: Text('Selesai', style: TextStyle(color: textColor)),
+                value: _isCompleted,
+                onChanged: (val) => setState(() => _isCompleted = val),
+              ),
 
               const SizedBox(height: 16),
               _buildLabel('Pengingat :', textColor),
@@ -295,13 +342,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
-      style: TextStyle(color: inputTextColor), // Set text color
+      style: TextStyle(color: inputTextColor),
       validator:
           (value) =>
               value == null || value.isEmpty ? 'Tidak boleh kosong' : null,
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(color: hintTextColor), // Set hint text color
+        hintStyle: TextStyle(color: hintTextColor),
         filled: true,
         fillColor: fillColor,
         border: OutlineInputBorder(
@@ -352,7 +399,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             ),
           ],
           onChanged: (val) => setState(() => _kategori = val),
-          dropdownColor: fillColor, // Background color of the dropdown menu
+          dropdownColor: fillColor,
         ),
       ),
     );
@@ -390,7 +437,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             ),
           ],
           onChanged: (val) => setState(() => _prioritas = val),
-          dropdownColor: fillColor, // Background color of the dropdown menu
+          dropdownColor: fillColor,
         ),
       ),
     );

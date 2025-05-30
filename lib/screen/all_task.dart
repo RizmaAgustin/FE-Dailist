@@ -60,7 +60,6 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
             context,
             MaterialPageRoute(builder: (_) => const AddTaskScreen()),
           );
-          // Refresh tasks after returning
           _AllTasksContentState? state =
               _AllTasksContent.globalKey.currentState;
           state?.fetchTasks();
@@ -74,7 +73,7 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
 }
 
 class Task {
-  final int id; // assuming each task has an id for update
+  final int id;
   final String title;
   final DateTime? dueDate;
   final bool isCompleted;
@@ -167,7 +166,7 @@ class _AllTasksContentState extends State<_AllTasksContent> {
   Future<void> toggleTaskCompletion(Task task) async {
     final url = Uri.parse(
       'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
-    ); // contoh endpoint
+    );
     final token = await getToken();
 
     try {
@@ -180,17 +179,78 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       );
 
       if (response.statusCode == 200) {
-        // Update local state dengan fetch ulang
         await fetchTasks();
       } else {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Gagal update status tugas.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal update status tugas.')),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error saat update status: $e')));
+    }
+  }
+
+  Future<void> deleteTask(int taskId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Konfirmasi'),
+            content: const Text('Apakah Anda yakin ingin menghapus tugas ini?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Batal'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed != true) return;
+
+    final url = Uri.parse('http://127.0.0.1:8000/api/tasks/$taskId');
+    final token = await getToken();
+
+    try {
+      final response = await http.delete(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Tugas berhasil dihapus')));
+        await fetchTasks();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menghapus: ${response.body}')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> navigateToEditTask(Task task) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => AddTaskScreen(taskToEdit: task)),
+    );
+
+    if (result == true) {
+      await fetchTasks();
     }
   }
 
@@ -255,6 +315,8 @@ class _AllTasksContentState extends State<_AllTasksContent> {
                         (t) => TaskItem(
                           task: t,
                           onToggleCompleted: () => toggleTaskCompletion(t),
+                          onEdit: () => navigateToEditTask(t),
+                          onDelete: () => deleteTask(t.id),
                         ),
                       )
                       .toList(),
@@ -271,6 +333,8 @@ class _AllTasksContentState extends State<_AllTasksContent> {
                         (t) => TaskItem(
                           task: t,
                           onToggleCompleted: () => toggleTaskCompletion(t),
+                          onEdit: () => navigateToEditTask(t),
+                          onDelete: () => deleteTask(t.id),
                         ),
                       )
                       .toList(),
@@ -287,6 +351,8 @@ class _AllTasksContentState extends State<_AllTasksContent> {
                         (t) => TaskItem(
                           task: t,
                           onToggleCompleted: () => toggleTaskCompletion(t),
+                          onEdit: () => navigateToEditTask(t),
+                          onDelete: () => deleteTask(t.id),
                         ),
                       )
                       .toList(),
@@ -338,8 +404,15 @@ class _TaskSection extends StatelessWidget {
 class TaskItem extends StatelessWidget {
   final Task task;
   final VoidCallback onToggleCompleted;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
-  const TaskItem({required this.task, required this.onToggleCompleted});
+  const TaskItem({
+    required this.task,
+    required this.onToggleCompleted,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -361,6 +434,20 @@ class TaskItem extends StatelessWidget {
           ),
         ),
         subtitle: Text('Deadline: $dueDateText'),
+        trailing: PopupMenuButton(
+          itemBuilder:
+              (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+              ],
+          onSelected: (value) {
+            if (value == 'edit') {
+              onEdit();
+            } else if (value == 'delete') {
+              onDelete();
+            }
+          },
+        ),
       ),
     );
   }

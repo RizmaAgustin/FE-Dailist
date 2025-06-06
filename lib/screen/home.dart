@@ -417,7 +417,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     controller: _searchController,
                     style: TextStyle(color: textColor),
                     decoration: InputDecoration(
-                      hintText: 'Search Tasks',
+                      hintText: 'Cari Tugas',
                       hintStyle: TextStyle(color: secondaryTextColor),
                       prefixIcon: Icon(Icons.search, color: secondaryTextColor),
                       border: InputBorder.none,
@@ -482,7 +482,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Categories',
+                            'Kategori',
                             style: TextStyle(
                               fontSize: 20.0,
                               fontWeight: FontWeight.bold,
@@ -497,7 +497,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               alignment: WrapAlignment.center,
                               children: [
                                 _buildCategoryCard(
-                                  'Work',
+                                  'Kerja',
                                   categoryCounts['Kerja']!,
                                   Icons.work,
                                   cardColor,
@@ -505,7 +505,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Kerja',
                                 ),
                                 _buildCategoryCard(
-                                  'Personal',
+                                  'Pribadi',
                                   categoryCounts['Pribadi']!,
                                   Icons.person,
                                   cardColor,
@@ -513,7 +513,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Pribadi',
                                 ),
                                 _buildCategoryCard(
-                                  'Study',
+                                  'Belajar',
                                   categoryCounts['Belajar']!,
                                   Icons.book,
                                   cardColor,
@@ -521,7 +521,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Belajar',
                                 ),
                                 _buildCategoryCard(
-                                  'All',
+                                  'Semua',
                                   categoryCounts['Semua']!,
                                   Icons.folder,
                                   cardColor,
@@ -536,7 +536,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                "Today's Tasks",
+                                "Tugas Hari Ini",
                                 style: TextStyle(
                                   fontSize: 20.0,
                                   fontWeight: FontWeight.bold,
@@ -546,7 +546,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               TextButton(
                                 onPressed: () {},
                                 child: const Text(
-                                  'View All',
+                                  'Lihat Semua',
                                   style: TextStyle(color: Colors.blue),
                                 ),
                               ),
@@ -556,7 +556,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                           if (_filteredTasks.isEmpty)
                             Center(
                               child: Text(
-                                'No tasks for today',
+                                'Tidak ada tugas hari ini.',
                                 style: TextStyle(color: textColor),
                               ),
                             )

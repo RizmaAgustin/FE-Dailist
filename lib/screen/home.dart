@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../theme/theme_provider.dart';
 import 'add_task.dart';
@@ -105,12 +109,12 @@ class Task {
 
   String get formattedTime {
     if (dueDate == null) return 'No time';
-    return '${dueDate!.hour.toString().padLeft(2, '0')}:${dueDate!.minute.toString().padLeft(2, '0')}';
+    return DateFormat('HH:mm').format(dueDate!);
   }
 
   String get formattedDate {
     if (dueDate == null) return 'No date';
-    return '${dueDate!.day}/${dueDate!.month}/${dueDate!.year}';
+    return DateFormat('dd/MM/yyyy').format(dueDate!);
   }
 }
 
@@ -173,7 +177,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Gagal memuat tugas: ${e.toString()}';
+          _errorMessage = 'Failed to load tasks: ${e.toString()}';
           _isLoading = false;
         });
       }
@@ -211,10 +215,79 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengubah status: ${e.toString()}')),
+          SnackBar(content: Text('Failed to change status: ${e.toString()}')),
         );
       }
     }
+  }
+
+  Future<void> _generatePdf() async {
+    final pdf = pw.Document();
+
+    // Add a page with header and table
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        build:
+            (pw.Context context) => [
+              pw.Header(
+                level: 0,
+                child: pw.Text(
+                  'Task List Report',
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'Generated on: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+              ),
+              pw.SizedBox(height: 20),
+              pw.Table.fromTextArray(
+                context: context,
+                border: pw.TableBorder.all(),
+                headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                headerDecoration: pw.BoxDecoration(color: PdfColors.grey300),
+                headers: [
+                  '#',
+                  'Title',
+                  'Category',
+                  'Priority',
+                  'Due Date',
+                  'Status',
+                ],
+                data:
+                    _tasks
+                        .map(
+                          (task) => [
+                            (_tasks.indexOf(task) + 1).toString(),
+                            task.title,
+                            task.category ?? '-',
+                            task.priority ?? '-',
+                            task.dueDate != null
+                                ? DateFormat('yyyy-MM-dd').format(task.dueDate!)
+                                : '-',
+                            task.isCompleted ? 'Completed' : 'Pending',
+                          ],
+                        )
+                        .toList(),
+              ),
+              pw.SizedBox(height: 20),
+              pw.Text('Total Tasks: ${_tasks.length}'),
+              pw.Text(
+                'Completed: ${_tasks.where((t) => t.isCompleted).length}',
+              ),
+              pw.Text('Pending: ${_tasks.where((t) => !t.isCompleted).length}'),
+            ],
+      ),
+    );
+
+    // Save and show the PDF
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
   }
 
   @override
@@ -226,18 +299,15 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   List<Task> get _filteredTasks {
     final today = DateTime.now();
     return _tasks.where((task) {
-      // Filter by category (case insensitive and handles null)
       final matchesCategory =
           _selectedCategory == 'Semua' ||
           (task.category != null &&
               task.category!.toLowerCase() == _selectedCategory.toLowerCase());
 
-      // Filter by search query
       final matchesSearch =
           _searchQuery.isEmpty ||
           task.title.toLowerCase().contains(_searchQuery.toLowerCase());
 
-      // Filter by today's date
       final isToday =
           task.dueDate != null &&
           task.dueDate!.year == today.year &&
@@ -347,7 +417,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     controller: _searchController,
                     style: TextStyle(color: textColor),
                     decoration: InputDecoration(
-                      hintText: 'Cari Tugas',
+                      hintText: 'Search Tasks',
                       hintStyle: TextStyle(color: secondaryTextColor),
                       prefixIcon: Icon(Icons.search, color: secondaryTextColor),
                       border: InputBorder.none,
@@ -401,7 +471,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _loadTasks,
-                            child: const Text('Coba Lagi'),
+                            child: const Text('Try Again'),
                           ),
                         ],
                       ),
@@ -412,7 +482,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Kategori',
+                            'Categories',
                             style: TextStyle(
                               fontSize: 20.0,
                               fontWeight: FontWeight.bold,
@@ -427,7 +497,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               alignment: WrapAlignment.center,
                               children: [
                                 _buildCategoryCard(
-                                  'Kerja',
+                                  'Work',
                                   categoryCounts['Kerja']!,
                                   Icons.work,
                                   cardColor,
@@ -435,7 +505,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Kerja',
                                 ),
                                 _buildCategoryCard(
-                                  'Pribadi',
+                                  'Personal',
                                   categoryCounts['Pribadi']!,
                                   Icons.person,
                                   cardColor,
@@ -443,7 +513,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Pribadi',
                                 ),
                                 _buildCategoryCard(
-                                  'Belajar',
+                                  'Study',
                                   categoryCounts['Belajar']!,
                                   Icons.book,
                                   cardColor,
@@ -451,7 +521,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                   isSelected: _selectedCategory == 'Belajar',
                                 ),
                                 _buildCategoryCard(
-                                  'Semua',
+                                  'All',
                                   categoryCounts['Semua']!,
                                   Icons.folder,
                                   cardColor,
@@ -466,7 +536,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Tugas Hari Ini',
+                                "Today's Tasks",
                                 style: TextStyle(
                                   fontSize: 20.0,
                                   fontWeight: FontWeight.bold,
@@ -476,7 +546,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               TextButton(
                                 onPressed: () {},
                                 child: const Text(
-                                  'Lihat Semua',
+                                  'View All',
                                   style: TextStyle(color: Colors.blue),
                                 ),
                               ),
@@ -486,7 +556,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                           if (_filteredTasks.isEmpty)
                             Center(
                               child: Text(
-                                'Tidak ada tugas untuk hari ini',
+                                'No tasks for today',
                                 style: TextStyle(color: textColor),
                               ),
                             )
@@ -529,9 +599,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
               ),
               const SizedBox(width: 16.0),
               FloatingActionButton(
-                onPressed: () {
-                  // TODO: aksi generate PDF
-                },
+                onPressed: _generatePdf,
                 backgroundColor: Colors.blue,
                 heroTag: 'pdf',
                 shape: const CircleBorder(),

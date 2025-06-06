@@ -8,13 +8,15 @@ import 'add_task.dart';
 import '../theme/theme_provider.dart';
 
 class AllTasksScreen extends StatefulWidget {
-  const AllTasksScreen({super.key});
+  const AllTasksScreen({Key? key}) : super(key: key);
 
   @override
   State<AllTasksScreen> createState() => _AllTasksScreenState();
 }
 
 class _AllTasksScreenState extends State<AllTasksScreen> {
+  final GlobalKey<_AllTasksContentState> _contentKey = GlobalKey();
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -30,9 +32,7 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: iconColor),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Semua Tugas',
@@ -47,22 +47,20 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
                   : Icons.nightlight_round_outlined,
               color: iconColor,
             ),
-            onPressed: () {
-              themeProvider.toggleTheme();
-            },
+            onPressed: () => themeProvider.toggleTheme(),
           ),
         ],
       ),
-      body: const _AllTasksContent(),
+      body: _AllTasksContent(key: _contentKey),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          await Navigator.push(
+          final result = await Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const AddTaskScreen()),
           );
-          _AllTasksContentState? state =
-              _AllTasksContent.globalKey.currentState;
-          state?.fetchTasks();
+          if (result == true) {
+            _contentKey.currentState?.refreshTasks();
+          }
         },
         backgroundColor: const Color(0xFF2196F3),
         shape: const CircleBorder(),
@@ -75,12 +73,18 @@ class _AllTasksScreenState extends State<AllTasksScreen> {
 class Task {
   final int id;
   final String title;
+  final String? description;
+  final String? category;
+  final String? priority;
   final DateTime? dueDate;
   final bool isCompleted;
 
   Task({
     required this.id,
     required this.title,
+    this.description,
+    this.category,
+    this.priority,
     this.dueDate,
     required this.isCompleted,
   });
@@ -89,9 +93,12 @@ class Task {
     return Task(
       id: json['id'] ?? 0,
       title: json['title'] ?? 'No Title',
+      description: json['description'],
+      category: json['category'],
+      priority: json['priority'],
       dueDate:
           json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
-      isCompleted: json['is_completed'] == 1,
+      isCompleted: json['is_completed'] == 1 || json['is_completed'] == true,
     );
   }
 }
@@ -99,43 +106,40 @@ class Task {
 class _AllTasksContent extends StatefulWidget {
   const _AllTasksContent({Key? key}) : super(key: key);
 
-  static final globalKey = GlobalKey<_AllTasksContentState>();
-
   @override
   State<_AllTasksContent> createState() => _AllTasksContentState();
 }
 
 class _AllTasksContentState extends State<_AllTasksContent> {
-  List<Task> tasks = [];
-  bool isLoading = true;
-  String errorMessage = '';
+  List<Task> _tasks = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
+  DateTime? _lastRefreshTime;
 
   @override
   void initState() {
     super.initState();
-    fetchTasks();
+    _loadTasks();
   }
 
-  Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('token');
+  Future<void> refreshTasks() async {
+    await _loadTasks(showSnackbar: true);
   }
 
-  Future<void> fetchTasks() async {
-    setState(() {
-      isLoading = true;
-      errorMessage = '';
-    });
-
-    final url = Uri.parse(
-      'http://127.0.0.1:8000/api/tasks?email=rizmaagustin66@gmail.com',
-    );
-
-    final token = await getToken();
+  Future<void> _loadTasks({bool showSnackbar = false}) async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+    }
 
     try {
+      final token = await _getToken();
       final response = await http.get(
-        url,
+        Uri.parse(
+          'http://127.0.0.1:8000/api/tasks?email=rizmaagustin66@gmail.com',
+        ),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -144,34 +148,46 @@ class _AllTasksContentState extends State<_AllTasksContent> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          tasks = data.map((json) => Task.fromJson(json)).toList();
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _tasks = data.map((json) => Task.fromJson(json)).toList();
+            _isLoading = false;
+            _lastRefreshTime = DateTime.now();
+          });
+        }
+        if (showSnackbar) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Daftar tugas diperbarui')),
+          );
+        }
       } else {
-        setState(() {
-          errorMessage =
-              'Failed to load tasks. Status code: ${response.statusCode}';
-          isLoading = false;
-        });
+        throw Exception('Failed to load tasks: ${response.statusCode}');
       }
     } catch (e) {
-      setState(() {
-        errorMessage = 'Error fetching tasks: $e';
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Gagal memuat tugas: $e';
+          _isLoading = false;
+        });
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
-  Future<void> toggleTaskCompletion(Task task) async {
-    final url = Uri.parse(
-      'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
-    );
-    final token = await getToken();
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
 
+  Future<void> _toggleTaskCompletion(Task task) async {
     try {
+      final token = await _getToken();
       final response = await http.post(
-        url,
+        Uri.parse(
+          'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
+        ),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -179,20 +195,18 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       );
 
       if (response.statusCode == 200) {
-        await fetchTasks();
+        await _loadTasks();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal update status tugas.')),
-        );
+        throw Exception('Failed to toggle completion');
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error saat update status: $e')));
+      ).showSnackBar(SnackBar(content: Text('Gagal mengubah status: $e')));
     }
   }
 
-  Future<void> deleteTask(int taskId) async {
+  Future<void> _deleteTask(int taskId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder:
@@ -214,12 +228,10 @@ class _AllTasksContentState extends State<_AllTasksContent> {
 
     if (confirmed != true) return;
 
-    final url = Uri.parse('http://127.0.0.1:8000/api/tasks/$taskId');
-    final token = await getToken();
-
     try {
+      final token = await _getToken();
       final response = await http.delete(
-        url,
+        Uri.parse('http://127.0.0.1:8000/api/tasks/$taskId'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -230,59 +242,32 @@ class _AllTasksContentState extends State<_AllTasksContent> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Tugas berhasil dihapus')));
-        await fetchTasks();
+        await _loadTasks();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal menghapus: ${response.body}')),
-        );
+        throw Exception('Failed to delete task');
       }
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ).showSnackBar(SnackBar(content: Text('Gagal menghapus tugas: $e')));
     }
   }
 
-  Future<void> navigateToEditTask(Task task) async {
+  Future<void> _navigateToEditTask(Task task) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => AddTaskScreen(taskToEdit: task)),
     );
 
     if (result == true) {
-      await fetchTasks();
+      await _loadTasks();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.currentTheme == ThemeMode.dark;
-    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-
-    if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (errorMessage.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(errorMessage),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: fetchTasks,
-              child: const Text('Coba Lagi'),
-            ),
-          ],
-        ),
-      );
-    }
-
+  Widget _buildTaskList() {
     final now = DateTime.now();
     final lateTasks =
-        tasks
+        _tasks
             .where(
               (t) =>
                   !t.isCompleted &&
@@ -291,97 +276,112 @@ class _AllTasksContentState extends State<_AllTasksContent> {
             )
             .toList();
     final priorityTasks =
-        tasks
+        _tasks
             .where(
               (t) =>
                   !t.isCompleted &&
                   (t.dueDate == null || !t.dueDate!.isBefore(now)),
             )
             .toList();
-    final completedTasks = tasks.where((t) => t.isCompleted).toList();
+    final completedTasks = _tasks.where((t) => t.isCompleted).toList();
 
-    return SafeArea(
-      child: ListView(
-        children: [
-          if (lateTasks.isNotEmpty)
-            _TaskSection(
-              title: 'Terlambat',
-              color: Colors.orange,
-              isDark: isDark,
-              cardColor: cardColor,
-              tasks:
-                  lateTasks
-                      .map(
-                        (t) => TaskItem(
-                          task: t,
-                          onToggleCompleted: () => toggleTaskCompletion(t),
-                          onEdit: () => navigateToEditTask(t),
-                          onDelete: () => deleteTask(t.id),
-                        ),
-                      )
-                      .toList(),
+    return ListView(
+      children: [
+        if (lateTasks.isNotEmpty)
+          _TaskSection(
+            title: 'Terlambat',
+            color: Colors.orange,
+            tasks: lateTasks,
+            onToggle: _toggleTaskCompletion,
+            onEdit: _navigateToEditTask,
+            onDelete: _deleteTask,
+          ),
+        if (priorityTasks.isNotEmpty)
+          _TaskSection(
+            title: 'Tugas Prioritas',
+            color: Colors.blue,
+            tasks: priorityTasks,
+            onToggle: _toggleTaskCompletion,
+            onEdit: _navigateToEditTask,
+            onDelete: _deleteTask,
+          ),
+        if (completedTasks.isNotEmpty)
+          _TaskSection(
+            title: 'Tugas Selesai',
+            color: Colors.green,
+            tasks: completedTasks,
+            onToggle: _toggleTaskCompletion,
+            onEdit: _navigateToEditTask,
+            onDelete: _deleteTask,
+          ),
+        if (_tasks.isEmpty)
+          const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.task, size: 60, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'Tidak ada tugas',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+              ],
             ),
-          if (priorityTasks.isNotEmpty)
-            _TaskSection(
-              title: 'Tugas Prioritas',
-              color: Colors.blue,
-              isDark: isDark,
-              cardColor: cardColor,
-              tasks:
-                  priorityTasks
-                      .map(
-                        (t) => TaskItem(
-                          task: t,
-                          onToggleCompleted: () => toggleTaskCompletion(t),
-                          onEdit: () => navigateToEditTask(t),
-                          onDelete: () => deleteTask(t.id),
-                        ),
-                      )
-                      .toList(),
-            ),
-          if (completedTasks.isNotEmpty)
-            _TaskSection(
-              title: 'Tugas Selesai',
-              color: Colors.green,
-              isDark: isDark,
-              cardColor: cardColor,
-              tasks:
-                  completedTasks
-                      .map(
-                        (t) => TaskItem(
-                          task: t,
-                          onToggleCompleted: () => toggleTaskCompletion(t),
-                          onEdit: () => navigateToEditTask(t),
-                          onDelete: () => deleteTask(t.id),
-                        ),
-                      )
-                      .toList(),
-            ),
-        ],
-      ),
+          ),
+      ],
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.currentTheme == ThemeMode.dark;
+
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(_errorMessage, style: const TextStyle(color: Colors.red)),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadTasks,
+              child: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(onRefresh: _loadTasks, child: _buildTaskList());
   }
 }
 
 class _TaskSection extends StatelessWidget {
   final String title;
   final Color color;
-  final bool isDark;
-  final Color cardColor;
-  final List<TaskItem> tasks;
+  final List<Task> tasks;
+  final Function(Task) onToggle;
+  final Function(Task) onEdit;
+  final Function(int) onDelete;
 
   const _TaskSection({
     required this.title,
     required this.color,
-    required this.isDark,
-    required this.cardColor,
     required this.tasks,
+    required this.onToggle,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 20, left: 15, right: 15),
+      padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -394,58 +394,84 @@ class _TaskSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...tasks,
+          ...tasks.map(
+            (task) => _TaskItem(
+              task: task,
+              onToggle: () => onToggle(task),
+              onEdit: () => onEdit(task),
+              onDelete: () => onDelete(task.id),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class TaskItem extends StatelessWidget {
+class _TaskItem extends StatelessWidget {
   final Task task;
-  final VoidCallback onToggleCompleted;
+  final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const TaskItem({
+  const _TaskItem({
     required this.task,
-    required this.onToggleCompleted,
+    required this.onToggle,
     required this.onEdit,
     required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final dateFormat = DateFormat('dd/MM/yyyy');
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final dueDateText =
-        task.dueDate != null ? dateFormat.format(task.dueDate!) : '-';
+        task.dueDate != null
+            ? dateFormat.format(task.dueDate!)
+            : 'Tanpa deadline';
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 5),
+      margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
         leading: Checkbox(
           value: task.isCompleted,
-          onChanged: (_) => onToggleCompleted(),
+          onChanged: (_) => onToggle(),
         ),
         title: Text(
           task.title,
           style: TextStyle(
             decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: Text('Deadline: $dueDateText'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Deadline: $dueDateText'),
+            if (task.category != null) Text('Kategori: ${task.category!}'),
+            if (task.priority != null) Text('Prioritas: ${task.priority!}'),
+          ],
+        ),
         trailing: PopupMenuButton(
           itemBuilder:
               (context) => [
-                const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit),
+                    title: Text('Edit'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete, color: Colors.red),
+                    title: Text('Hapus', style: TextStyle(color: Colors.red)),
+                  ),
+                ),
               ],
           onSelected: (value) {
-            if (value == 'edit') {
-              onEdit();
-            } else if (value == 'delete') {
-              onDelete();
-            }
+            if (value == 'edit') onEdit();
+            if (value == 'delete') onDelete();
           },
         ),
       ),

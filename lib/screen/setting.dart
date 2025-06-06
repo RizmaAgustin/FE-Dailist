@@ -1,9 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../theme/theme_provider.dart'; // Pastikan path provider benar
+import 'package:shared_preferences/shared_preferences.dart';
+import '../theme/theme_provider.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String userName = 'Nama Pengguna';
+  String userEmail = 'Email Pengguna';
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      userEmail = prefs.getString('email') ?? 'Email tidak tersedia';
+      userName = prefs.getString('name') ?? 'Nama tidak tersedia';
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -11,16 +36,13 @@ class SettingsScreen extends StatelessWidget {
     final isDark = themeProvider.currentTheme == ThemeMode.dark;
     final iconColor = isDark ? Colors.white : Colors.black;
     final backgroundColor =
-        isDark
-            ? const Color(0xFF303030)
-            : const Color(0xFFEDF7FE); // Warna biru muda dari HomePage
+        isDark ? const Color(0xFF303030) : const Color(0xFFEDF7FE);
 
     return Scaffold(
-      backgroundColor: backgroundColor, // Background full biru sesuai tema
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor:
-            backgroundColor, // Background AppBar jadi biru sesuai tema
-        elevation: 0, // Hilangkan shadow AppBar
+        backgroundColor: backgroundColor,
+        elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: iconColor),
           onPressed: () {
@@ -30,7 +52,7 @@ class SettingsScreen extends StatelessWidget {
         title: Text(
           'Pengaturan',
           style: TextStyle(
-            color: iconColor, // Warna teks AppBar mengikuti warna ikon
+            color: iconColor,
             fontSize: 24,
             fontFamily: 'Signika',
             fontWeight: FontWeight.w600,
@@ -53,27 +75,31 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          _buildNameCard(isDark),
-          const SizedBox(height: 8.0),
-          _buildEmailCard(isDark),
-          const SizedBox(height: 16.0),
-          _buildNotificationCard(isDark),
-        ],
-      ),
+      body:
+          isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView(
+                padding: const EdgeInsets.all(16.0),
+                children: [
+                  _buildNameCard(isDark, userName),
+                  const SizedBox(height: 8.0),
+                  _buildEmailCard(isDark, userEmail),
+                  const SizedBox(height: 16.0),
+                  _buildNotificationCard(isDark),
+                  const SizedBox(height: 16.0),
+                  _buildLogoutButton(context),
+                ],
+              ),
     );
   }
 
-  Widget _buildNameCard(bool isDark) {
+  Widget _buildNameCard(bool isDark, String name) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
-    final cardColor =
-        isDark ? Colors.grey[800] : Colors.white; // Tambahkan warna card
+    final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: cardColor, // Gunakan warna card yang sesuai tema
+        color: cardColor,
         borderRadius: BorderRadius.circular(10.0),
       ),
       child: Row(
@@ -81,7 +107,7 @@ class SettingsScreen extends StatelessWidget {
           Icon(Icons.person_outline, size: 30.0, color: textColor),
           const SizedBox(width: 16.0),
           Text(
-            'Nama Kamu',
+            name,
             style: TextStyle(
               fontSize: 20.0,
               fontWeight: FontWeight.w600,
@@ -93,34 +119,29 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmailCard(bool isDark) {
+  Widget _buildEmailCard(bool isDark, String email) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
-    final cardColor =
-        isDark ? Colors.grey[800] : Colors.white; // Tambahkan warna card
+    final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: cardColor, // Gunakan warna card yang sesuai tema
+        color: cardColor,
         borderRadius: BorderRadius.circular(10.0),
       ),
       child: Padding(
         padding: const EdgeInsets.only(left: 46.0),
-        child: Text(
-          'You@gmail.com',
-          style: TextStyle(fontSize: 18.0, color: textColor),
-        ),
+        child: Text(email, style: TextStyle(fontSize: 18.0, color: textColor)),
       ),
     );
   }
 
   Widget _buildNotificationCard(bool isDark) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
-    final cardColor =
-        isDark ? Colors.grey[800] : Colors.white; // Tambahkan warna card
+    final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: cardColor, // Gunakan warna card yang sesuai tema
+        color: cardColor,
         borderRadius: BorderRadius.circular(10.0),
       ),
       child: Text(
@@ -130,6 +151,44 @@ class SettingsScreen extends StatelessWidget {
           fontWeight: FontWeight.w400,
           color: textColor,
         ),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    final isDark =
+        Provider.of<ThemeProvider>(context).currentTheme == ThemeMode.dark;
+    final buttonColor = isDark ? Colors.red[800] : Colors.red;
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.grey[800] : Colors.white,
+        borderRadius: BorderRadius.circular(10.0),
+      ),
+      child: ListTile(
+        leading: Icon(Icons.logout, color: buttonColor),
+        title: Text(
+          'Keluar',
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w400,
+            color: buttonColor,
+          ),
+        ),
+        onTap: () async {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('token');
+          await prefs.remove('email');
+          await prefs.remove('name');
+
+          // Navigasi ke halaman login
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            '/login',
+            (route) => false,
+          );
+        },
       ),
     );
   }

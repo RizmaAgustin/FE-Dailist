@@ -66,7 +66,6 @@ class _SignInPageState extends State<SignInPage> {
       return;
     }
 
-    // Validasi format email sederhana
     final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
     if (!emailRegex.hasMatch(email)) {
       ScaffoldMessenger.of(
@@ -94,12 +93,19 @@ class _SignInPageState extends State<SignInPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final token = data['token']; // pastikan key ini benar sesuai API
+        final token = data['token'];
+        final user = data['user']; // Asumsi API mengembalikan data user
 
         if (token != null) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           await prefs.setString('token', token);
           await prefs.setString('email', email);
+
+          // Simpan data user jika ada
+          if (user != null) {
+            await prefs.setString('name', user['name'] ?? '');
+            await prefs.setString('email', user['email'] ?? email);
+          }
 
           if (!mounted) return;
           Navigator.pushReplacement(

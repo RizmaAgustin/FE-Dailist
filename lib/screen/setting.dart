@@ -50,18 +50,27 @@ class SettingsScreen extends StatelessWidget {
       body: FutureBuilder<SharedPreferences>(
         future: SharedPreferences.getInstance(),
         builder: (context, snapshot) {
+          // Tampilkan loading indicator sampai data siap
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
           final prefs = snapshot.data!;
-          final userName = prefs.getString('name') ?? 'Nama Kamu';
+
+          // Jika nama belum ada, langsung tampilkan form edit
+          if (prefs.getString('name') == null ||
+              prefs.getString('name')!.isEmpty) {
+            return _buildEditNameFirst(context, isDark);
+          }
+
+          // Jika data sudah ada, tampilkan halaman settings normal
+          final userName = prefs.getString('name')!;
           final userEmail = prefs.getString('email') ?? 'You@gmail.com';
 
           return ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
-              _buildNameCard(isDark, userName),
+              _buildNameCard(isDark, userName, context),
               const SizedBox(height: 8.0),
               _buildEmailCard(isDark, userEmail),
               const SizedBox(height: 16.0),
@@ -73,7 +82,45 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNameCard(bool isDark, String userName) {
+  Widget _buildEditNameFirst(BuildContext context, bool isDark) {
+    final textColor = isDark ? Colors.white : const Color(0xFF333333);
+    final cardColor = isDark ? Colors.grey[800] : Colors.white;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(10.0),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'Silakan masukkan nama Anda',
+                    style: TextStyle(fontSize: 18.0, color: textColor),
+                  ),
+                  const SizedBox(height: 16.0),
+                  ElevatedButton(
+                    onPressed:
+                        () =>
+                            _showEditNameDialog(context, '', isFirstTime: true),
+                    child: const Text('Masukkan Nama'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNameCard(bool isDark, String userName, BuildContext context) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
     final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
@@ -86,16 +133,92 @@ class SettingsScreen extends StatelessWidget {
         children: [
           Icon(Icons.person_outline, size: 30.0, color: textColor),
           const SizedBox(width: 16.0),
-          Text(
-            userName,
-            style: TextStyle(
-              fontSize: 20.0,
-              fontWeight: FontWeight.w600,
-              color: textColor,
+          Expanded(
+            child: Text(
+              userName,
+              style: TextStyle(
+                fontSize: 20.0,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
             ),
+          ),
+          IconButton(
+            icon: Icon(Icons.edit, color: textColor),
+            onPressed: () => _showEditNameDialog(context, userName),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _showEditNameDialog(
+    BuildContext context,
+    String currentName, {
+    bool isFirstTime = false,
+  }) async {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = themeProvider.currentTheme == ThemeMode.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    final prefs = await SharedPreferences.getInstance();
+    final textController = TextEditingController(text: currentName);
+
+    await showDialog(
+      context: context,
+      builder:
+          (context) => Theme(
+            data: Theme.of(context).copyWith(
+              dialogBackgroundColor: isDark ? Colors.grey[800] : Colors.white,
+            ),
+            child: AlertDialog(
+              title: Text(
+                isFirstTime ? 'Masukkan Nama Anda' : 'Ubah Nama',
+                style: TextStyle(color: textColor),
+              ),
+              content: TextField(
+                controller: textController,
+                decoration: InputDecoration(
+                  labelText: 'Nama',
+                  labelStyle: TextStyle(color: textColor),
+                  border: const OutlineInputBorder(),
+                ),
+                style: TextStyle(color: textColor),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Batal', style: TextStyle(color: textColor)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (textController.text.trim().isNotEmpty) {
+                      await prefs.setString('name', textController.text.trim());
+                      Navigator.pop(context);
+
+                      // Untuk memperbarui tampilan
+                      if (isFirstTime) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsScreen(),
+                          ),
+                        );
+                      } else {
+                        // Gunakan Provider untuk update state jika perlu
+                        // Atau gunakan cara lain untuk memperbarui UI
+                      }
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Nama berhasil disimpan')),
+                      );
+                    }
+                  },
+                  child: Text('Simpan', style: TextStyle(color: textColor)),
+                ),
+              ],
+            ),
+          ),
     );
   }
 
@@ -118,7 +241,6 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  // _buildNotificationCard tetap sama
   Widget _buildNotificationCard(bool isDark) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
     final cardColor = isDark ? Colors.grey[800] : Colors.white;

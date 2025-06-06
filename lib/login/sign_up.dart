@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'sign_in.dart';
 import 'dart:async';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -15,8 +16,7 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-  final TextEditingController _nameController =
-      TextEditingController(); // Diubah dari _usernameController
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
@@ -34,7 +34,6 @@ class _SignUpPageState extends State<SignUpPage> {
 
     try {
       final url = Uri.parse('http://127.0.0.1:8000/api/register');
-
       final response = await http
           .post(
             url,
@@ -43,13 +42,10 @@ class _SignUpPageState extends State<SignUpPage> {
               'Accept': 'application/json',
             },
             body: jsonEncode({
-              'name':
-                  _nameController.text
-                      .trim(), // Pastikan sesuai dengan yang diminta backend
+              'name': _nameController.text.trim(),
               'email': _emailController.text.trim().toLowerCase(),
               'password': _passwordController.text,
-              'password_confirmation':
-                  _confirmPasswordController.text, // Jika backend membutuhkan
+              'password_confirmation': _confirmPasswordController.text,
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -58,6 +54,11 @@ class _SignUpPageState extends State<SignUpPage> {
       print('Response: $responseData');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        // Simpan data ke SharedPreferences
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('name', _nameController.text.trim());
+        await prefs.setString('email', _emailController.text.trim());
+
         _showSuccessDialog(context);
       } else {
         String errorMessage = 'Registrasi gagal';

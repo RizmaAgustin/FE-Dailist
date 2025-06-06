@@ -3,32 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme_provider.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  String userName = 'Nama Pengguna';
-  String userEmail = 'Email Pengguna';
-  bool isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserData();
-  }
-
-  Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      userEmail = prefs.getString('email') ?? 'Email tidak tersedia';
-      userName = prefs.getString('name') ?? 'Nama tidak tersedia';
-      isLoading = false;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,9 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: iconColor),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'Pengaturan',
@@ -68,32 +42,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 isDark ? Icons.wb_sunny : Icons.nightlight_round,
                 color: iconColor,
               ),
-              onPressed: () {
-                themeProvider.toggleTheme();
-              },
+              onPressed: () => themeProvider.toggleTheme(),
             ),
           ),
         ],
       ),
-      body:
-          isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                padding: const EdgeInsets.all(16.0),
-                children: [
-                  _buildNameCard(isDark, userName),
-                  const SizedBox(height: 8.0),
-                  _buildEmailCard(isDark, userEmail),
-                  const SizedBox(height: 16.0),
-                  _buildNotificationCard(isDark),
-                  const SizedBox(height: 16.0),
-                  _buildLogoutButton(context),
-                ],
-              ),
+      body: FutureBuilder<SharedPreferences>(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final prefs = snapshot.data!;
+          final userName = prefs.getString('name') ?? 'Nama Kamu';
+          final userEmail = prefs.getString('email') ?? 'You@gmail.com';
+
+          return ListView(
+            padding: const EdgeInsets.all(16.0),
+            children: [
+              _buildNameCard(isDark, userName),
+              const SizedBox(height: 8.0),
+              _buildEmailCard(isDark, userEmail),
+              const SizedBox(height: 16.0),
+              _buildNotificationCard(isDark),
+            ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildNameCard(bool isDark, String name) {
+  Widget _buildNameCard(bool isDark, String userName) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
     final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
@@ -107,7 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Icon(Icons.person_outline, size: 30.0, color: textColor),
           const SizedBox(width: 16.0),
           Text(
-            name,
+            userName,
             style: TextStyle(
               fontSize: 20.0,
               fontWeight: FontWeight.w600,
@@ -119,7 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildEmailCard(bool isDark, String email) {
+  Widget _buildEmailCard(bool isDark, String userEmail) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
     final cardColor = isDark ? Colors.grey[800] : Colors.white;
     return Container(
@@ -130,11 +110,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: Padding(
         padding: const EdgeInsets.only(left: 46.0),
-        child: Text(email, style: TextStyle(fontSize: 18.0, color: textColor)),
+        child: Text(
+          userEmail,
+          style: TextStyle(fontSize: 18.0, color: textColor),
+        ),
       ),
     );
   }
 
+  // _buildNotificationCard tetap sama
   Widget _buildNotificationCard(bool isDark) {
     final textColor = isDark ? Colors.white : const Color(0xFF333333);
     final cardColor = isDark ? Colors.grey[800] : Colors.white;
@@ -151,44 +135,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: FontWeight.w400,
           color: textColor,
         ),
-      ),
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context) {
-    final isDark =
-        Provider.of<ThemeProvider>(context).currentTheme == ThemeMode.dark;
-    final buttonColor = isDark ? Colors.red[800] : Colors.red;
-
-    return Container(
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.grey[800] : Colors.white,
-        borderRadius: BorderRadius.circular(10.0),
-      ),
-      child: ListTile(
-        leading: Icon(Icons.logout, color: buttonColor),
-        title: Text(
-          'Keluar',
-          style: TextStyle(
-            fontSize: 18.0,
-            fontWeight: FontWeight.w400,
-            color: buttonColor,
-          ),
-        ),
-        onTap: () async {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.remove('token');
-          await prefs.remove('email');
-          await prefs.remove('name');
-
-          // Navigasi ke halaman login
-          Navigator.pushNamedAndRemoveUntil(
-            context,
-            '/login',
-            (route) => false,
-          );
-        },
       ),
     );
   }

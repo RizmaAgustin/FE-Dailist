@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'sign_in.dart';
+import 'dart:async';
+import 'dart:io';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -12,59 +14,128 @@ class SignUpPage extends StatefulWidget {
 
 class _SignUpPageState extends State<SignUpPage> {
   bool _isPasswordVisible = false;
-  final TextEditingController _usernameController = TextEditingController();
+  bool _isLoading = false;
+  final TextEditingController _nameController =
+      TextEditingController(); // Diubah dari _usernameController
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+  }
 
   Future<void> _registerUser() async {
-    final url = Uri.parse(
-      'http://127.0.0.1:8000/api/register',
-    ); // Ganti dengan URL API kamu
+    if (!_formKey.currentState!.validate()) return;
 
-    if (_usernameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Harap isi semua kolom')));
-      return;
-    }
+    setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': _usernameController.text,
-          'email': _emailController.text,
-          'password': _passwordController.text,
-        }),
-      );
+      final url = Uri.parse('http://127.0.0.1:8000/api/register');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'name':
+                  _nameController.text
+                      .trim(), // Pastikan sesuai dengan yang diminta backend
+              'email': _emailController.text.trim().toLowerCase(),
+              'password': _passwordController.text,
+              'password_confirmation':
+                  _confirmPasswordController.text, // Jika backend membutuhkan
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      final responseData = jsonDecode(response.body);
+      print('Response: $responseData');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        print('Registrasi berhasil: $data');
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Registrasi berhasil')));
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => SignInPage()),
-        );
+        _showSuccessDialog(context);
       } else {
-        print('Registrasi gagal: ${response.statusCode}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registrasi gagal: ${response.body}')),
-        );
+        String errorMessage = 'Registrasi gagal';
+        if (responseData.containsKey('errors')) {
+          errorMessage = _parseErrorMessages(responseData['errors']);
+        } else if (responseData.containsKey('message')) {
+          errorMessage = responseData['message'];
+        }
+        throw Exception(errorMessage);
       }
-    } catch (e) {
-      print('Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Terjadi kesalahan jaringan')),
+    } on SocketException {
+      _showErrorSnackbar(
+        'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
       );
+    } on TimeoutException {
+      _showErrorSnackbar('Waktu koneksi habis. Coba lagi nanti.');
+    } on http.ClientException catch (e) {
+      _showErrorSnackbar('Kesalahan jaringan: ${e.message}');
+    } on FormatException {
+      _showErrorSnackbar('Format response tidak valid dari server.');
+    } on Exception catch (e) {
+      _showErrorSnackbar(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  String _parseErrorMessages(Map<String, dynamic> errors) {
+    return errors.entries
+        .map((entry) => '${entry.key}: ${entry.value.join(', ')}')
+        .join('\n');
+  }
+
+  void _showErrorSnackbar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  Future<void> _showSuccessDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Registrasi Berhasil'),
+            content: const Text(
+              'Akun Anda telah berhasil dibuat. Silakan login.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SignInPage()),
+                  );
+                },
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,142 +163,249 @@ class _SignUpPageState extends State<SignUpPage> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Daftar',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontFamily: 'Signika',
-                      fontWeight: FontWeight.w700,
-                      color: getTextColor(),
+      body: Form(
+        key: _formKey,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 30,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Daftar',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontFamily: 'Signika',
+                        fontWeight: FontWeight.w700,
+                        color: getTextColor(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 40),
-                  _buildLabel('Username :', getTextColor()),
-                  const SizedBox(height: 5),
-                  _buildInputField(
-                    _usernameController,
-                    'Your name',
-                    getTextFieldColor(),
-                    getTextColor(),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Email :', getTextColor()),
-                  const SizedBox(height: 5),
-                  _buildInputField(
-                    _emailController,
-                    'you@gmail.com',
-                    getTextFieldColor(),
-                    getTextColor(),
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLabel('Password :', getTextColor()),
-                  const SizedBox(height: 5),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: !_isPasswordVisible,
-                    style: TextStyle(color: getTextColor()),
-                    decoration: InputDecoration(
-                      hintText: '********',
-                      hintStyle: TextStyle(
-                        color: getTextColor().withOpacity(0.6),
-                      ),
-                      filled: true,
-                      fillColor: getTextFieldColor(),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(50),
-                        borderSide: const BorderSide(color: Color(0xFFD0D0D0)),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 15,
-                        horizontal: 20,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: getTextColor(),
+                    const SizedBox(height: 40),
+                    _buildLabel('Nama Lengkap :', getTextColor()),
+                    const SizedBox(height: 5),
+                    TextFormField(
+                      controller: _nameController,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Nama lengkap wajib diisi';
+                        }
+                        return null;
+                      },
+                      style: TextStyle(color: getTextColor()),
+                      decoration: InputDecoration(
+                        hintText: 'Masukkan nama lengkap',
+                        hintStyle: TextStyle(
+                          color: getTextColor().withOpacity(0.6),
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
+                        filled: true,
+                        fillColor: getTextFieldColor(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(50),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD0D0D0),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 15,
+                          horizontal: 20,
+                        ),
+                        errorStyle: const TextStyle(fontSize: 12),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: SizedBox(
-                      width: 131,
+                    const SizedBox(height: 20),
+                    _buildLabel('Email :', getTextColor()),
+                    const SizedBox(height: 5),
+                    TextFormField(
+                      controller: _emailController,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Email wajib diisi';
+                        }
+                        if (!_isValidEmail(value)) {
+                          return 'Masukkan email yang valid';
+                        }
+                        return null;
+                      },
+                      keyboardType: TextInputType.emailAddress,
+                      style: TextStyle(color: getTextColor()),
+                      decoration: InputDecoration(
+                        hintText: 'contoh@gmail.com',
+                        hintStyle: TextStyle(
+                          color: getTextColor().withOpacity(0.6),
+                        ),
+                        filled: true,
+                        fillColor: getTextFieldColor(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(50),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD0D0D0),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 15,
+                          horizontal: 20,
+                        ),
+                        errorStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabel('Password :', getTextColor()),
+                    const SizedBox(height: 5),
+                    TextFormField(
+                      controller: _passwordController,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Password wajib diisi';
+                        }
+                        if (value.length < 6) {
+                          return 'Password minimal 6 karakter';
+                        }
+                        return null;
+                      },
+                      obscureText: !_isPasswordVisible,
+                      style: TextStyle(color: getTextColor()),
+                      decoration: InputDecoration(
+                        hintText: '********',
+                        hintStyle: TextStyle(
+                          color: getTextColor().withOpacity(0.6),
+                        ),
+                        filled: true,
+                        fillColor: getTextFieldColor(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(50),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD0D0D0),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 15,
+                          horizontal: 20,
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                            color: getTextColor(),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
+                          },
+                        ),
+                        errorStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _buildLabel('Konfirmasi Password :', getTextColor()),
+                    const SizedBox(height: 5),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Harap konfirmasi password';
+                        }
+                        if (value != _passwordController.text) {
+                          return 'Password tidak sama';
+                        }
+                        return null;
+                      },
+                      obscureText: !_isPasswordVisible,
+                      style: TextStyle(color: getTextColor()),
+                      decoration: InputDecoration(
+                        hintText: '********',
+                        hintStyle: TextStyle(
+                          color: getTextColor().withOpacity(0.6),
+                        ),
+                        filled: true,
+                        fillColor: getTextFieldColor(),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(50),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFD0D0D0),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 15,
+                          horizontal: 20,
+                        ),
+                        errorStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    SizedBox(
+                      width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _registerUser,
+                        onPressed: _isLoading ? null : _registerUser,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2196F3),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(50),
                           ),
                         ),
-                        child: const Text(
-                          'Daftar',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontFamily: 'Signika',
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                        child:
+                            _isLoading
+                                ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                                : const Text(
+                                  'Daftar',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontFamily: 'Signika',
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sudah daftar?',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontFamily: 'Signika',
-                            color: getTextColor(),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => SignInPage()),
-                            );
-                          },
-                          child: const Text(
-                            'Masuk',
+                    const SizedBox(height: 20),
+                    Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Sudah punya akun?',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 14,
                               fontFamily: 'Signika',
-                              color: Color(0xFF2196F3),
+                              color: getTextColor(),
                             ),
                           ),
-                        ),
-                      ],
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SignInPage(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              'Masuk',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontFamily: 'Signika',
+                                color: Color(0xFF2196F3),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -235,32 +413,11 @@ class _SignUpPageState extends State<SignUpPage> {
   Widget _buildLabel(String text, Color color) {
     return Text(
       text,
-      style: TextStyle(fontSize: 10, fontFamily: 'Roboto', color: color),
-    );
-  }
-
-  Widget _buildInputField(
-    TextEditingController controller,
-    String hintText,
-    Color bgColor,
-    Color textColor,
-  ) {
-    return TextField(
-      controller: controller,
-      style: TextStyle(color: textColor),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: TextStyle(color: textColor.withOpacity(0.6)),
-        filled: true,
-        fillColor: bgColor,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(50),
-          borderSide: const BorderSide(color: Color(0xFFD0D0D0)),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          vertical: 15,
-          horizontal: 20,
-        ),
+      style: TextStyle(
+        fontSize: 14,
+        fontFamily: 'Roboto',
+        color: color,
+        fontWeight: FontWeight.w500,
       ),
     );
   }

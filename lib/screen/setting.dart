@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import '../theme/theme_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -75,6 +76,8 @@ class SettingsScreen extends StatelessWidget {
               _buildEmailCard(isDark, userEmail),
               const SizedBox(height: 16.0),
               _buildNotificationCard(isDark),
+              const SizedBox(height: 16.0),
+              _buildLogoutButton(context, isDark),
             ],
           );
         },
@@ -196,7 +199,6 @@ class SettingsScreen extends StatelessWidget {
                       await prefs.setString('name', textController.text.trim());
                       Navigator.pop(context);
 
-                      // Untuk memperbarui tampilan
                       if (isFirstTime) {
                         Navigator.pushReplacement(
                           context,
@@ -204,9 +206,6 @@ class SettingsScreen extends StatelessWidget {
                             builder: (context) => const SettingsScreen(),
                           ),
                         );
-                      } else {
-                        // Gunakan Provider untuk update state jika perlu
-                        // Atau gunakan cara lain untuk memperbarui UI
                       }
 
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -259,5 +258,107 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildLogoutButton(BuildContext context, bool isDark) {
+    final buttonColor = isDark ? Colors.red[700] : Colors.red;
+    final textColor = isDark ? Colors.white : Colors.white;
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: buttonColor,
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+      ),
+      onPressed: () => _showLogoutConfirmation(context),
+      child: Text(
+        'Logout',
+        style: TextStyle(
+          color: textColor,
+          fontSize: 18.0,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLogoutConfirmation(BuildContext context) async {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final isDark = themeProvider.currentTheme == ThemeMode.dark;
+    final textColor = isDark ? Colors.white : Colors.black;
+
+    return showDialog(
+      context: context,
+      builder:
+          (context) => Theme(
+            data: Theme.of(context).copyWith(
+              dialogBackgroundColor: isDark ? Colors.grey[800] : Colors.white,
+            ),
+            child: AlertDialog(
+              title: Text(
+                'Konfirmasi Logout',
+                style: TextStyle(color: textColor),
+              ),
+              content: Text(
+                'Apakah Anda yakin ingin logout?',
+                style: TextStyle(color: textColor),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Batal', style: TextStyle(color: textColor)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    Navigator.pop(context); // Tutup dialog
+                    await _performLogout(context);
+                  },
+                  child: Text('Logout', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Future<void> _performLogout(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null) {
+      await _clearLocalDataAndNavigate(context);
+      return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('http://127.0.0.1:8000/api/logout'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        await _clearLocalDataAndNavigate(context);
+      } else {
+        await _clearLocalDataAndNavigate(context);
+      }
+    } catch (e) {
+      await _clearLocalDataAndNavigate(context);
+    }
+  }
+
+  Future<void> _clearLocalDataAndNavigate(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Anda telah logout')));
   }
 }

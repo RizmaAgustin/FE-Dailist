@@ -3,12 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'login/sign_in.dart';
 import 'theme/theme_provider.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('id_ID', null).then(
-    (_) => runApp(
-      ChangeNotifierProvider(create: (_) => ThemeProvider(), child: MyApp()),
+
+  await NotificationService.initialize(); // <--- Inisialisasi notifikasi
+
+  await initializeDateFormatting('id_ID', null);
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeProvider(),
+      child: const MyApp(),
     ),
   );
 }
@@ -27,6 +34,7 @@ class MyApp extends StatelessWidget {
           darkTheme: ThemeData.dark(),
           themeMode:
               themeProvider.currentTheme, // Gunakan langsung currentTheme
+          navigatorKey: navigatorKey, // ini penting!
           home: OnboardingScreen(),
         );
       },

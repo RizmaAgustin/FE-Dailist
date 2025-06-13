@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
+import '../services/notification_service.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? taskToEdit;
+  final Function()? onTaskUpdated;
 
-  const AddTaskScreen({super.key, this.taskToEdit});
+  const AddTaskScreen({super.key, this.taskToEdit, this.onTaskUpdated});
 
   @override
   State<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -21,6 +24,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   final _judulController = TextEditingController();
   final _catatanController = TextEditingController();
 
+  static const List<String> _kategoriOptions = ['Kerja', 'Pribadi', 'Belajar'];
+  static const List<String> _prioritasOptions = ['Tinggi', 'Sedang', 'Rendah'];
+
   String? _kategori;
   String? _prioritas;
   DateTime? _tanggal;
@@ -28,32 +34,78 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   bool _aturPengingat = false;
   bool _isCompleted = false;
   int _selectedIndex = 0;
-
-  final int userId = 1;
+  Timer? _deadlineTimer;
 
   @override
   void initState() {
     super.initState();
     if (widget.taskToEdit != null) {
-      _judulController.text = widget.taskToEdit!.title;
-      _isCompleted = widget.taskToEdit!.isCompleted;
-      if (widget.taskToEdit!.dueDate != null) {
-        _tanggal = widget.taskToEdit!.dueDate;
-        _waktu = TimeOfDay.fromDateTime(widget.taskToEdit!.dueDate!);
-      }
+      _initializeEditMode();
     }
   }
 
-  void _onItemTapped(int index) {
-    final pages = [
-      const AddTaskScreen(),
-      const AllTasksScreen(),
-      const CalendarScreen(),
-      const SettingsScreen(),
-    ];
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => pages[index]),
+  void _initializeEditMode() {
+    final task = widget.taskToEdit!;
+    _judulController.text = task.title;
+    _catatanController.text = task.description ?? '';
+    _kategori =
+        _kategoriOptions.contains(task.category)
+            ? task.category
+            : _kategoriOptions.first;
+    _prioritas =
+        _prioritasOptions.contains(task.priority)
+            ? task.priority
+            : _prioritasOptions.first;
+    _isCompleted = task.isCompleted;
+    _aturPengingat = task.dueDate != null;
+
+    if (task.dueDate != null) {
+      _tanggal = task.dueDate;
+      _waktu = TimeOfDay.fromDateTime(task.dueDate!);
+      _startDeadlineTimer(task.dueDate!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _deadlineTimer?.cancel();
+    _judulController.dispose();
+    _catatanController.dispose();
+    super.dispose();
+  }
+
+  void _startDeadlineTimer(DateTime deadline) {
+    _deadlineTimer?.cancel();
+    final now = DateTime.now();
+    final durationUntilDeadline = deadline.difference(now);
+    if (durationUntilDeadline.isNegative) return;
+    final alertTime = deadline.subtract(const Duration(minutes: 1));
+    final alertDuration = alertTime.difference(now);
+    _deadlineTimer = Timer(alertDuration, () {
+      _showDeadlineAlert();
+    });
+  }
+
+  void _showDeadlineAlert() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Deadline Mendekati!'),
+          content: Text(
+            'Tugas "${_judulController.text}" akan segera berakhir pada '
+            '${DateFormat('dd MMMM yyyy HH:mm').format(DateTime(_tanggal!.year, _tanggal!.month, _tanggal!.day, _waktu!.hour, _waktu!.minute))}',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -73,6 +125,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _waktu!.minute,
     );
 
+    _startDeadlineTimer(deadline);
+
     final url =
         widget.taskToEdit == null
             ? Uri.parse('http://127.0.0.1:8000/api/tasks')
@@ -82,16 +136,27 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     final token = await getToken();
 
-    final body = {
-      'user_id': userId.toString(),
-      'title': _judulController.text,
-      'description': _catatanController.text,
-      'category': _kategori ?? '',
-      'priority': _prioritas ?? '',
-      'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
-      'reminder': _aturPengingat ? '1' : '0',
-      'is_completed': _isCompleted ? '1' : '0',
-    };
+    // Perhatikan: user_id hanya dikirim saat tambah, TIDAK saat edit.
+    final body =
+        widget.taskToEdit == null
+            ? {
+              'title': _judulController.text,
+              'description': _catatanController.text,
+              'category': _kategori ?? '',
+              'priority': _prioritas ?? '',
+              'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
+              'reminder': _aturPengingat ? '1' : '0',
+              'is_completed': _isCompleted ? '1' : '0',
+            }
+            : {
+              'title': _judulController.text,
+              'description': _catatanController.text,
+              'category': _kategori ?? '',
+              'priority': _prioritas ?? '',
+              'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
+              'reminder': _aturPengingat ? '1' : '0',
+              'is_completed': _isCompleted ? '1' : '0',
+            };
 
     try {
       final response =
@@ -115,8 +180,25 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 body: json.encode(body),
               );
 
-      debugPrint('STATUS CODE: ${response.statusCode}');
-      debugPrint('RESPONSE BODY: ${response.body}');
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          _aturPengingat) {
+        final deadlineNotif = DateTime(
+          _tanggal!.year,
+          _tanggal!.month,
+          _tanggal!.day,
+          _waktu!.hour,
+          _waktu!.minute,
+        );
+
+        final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+        await NotificationService.scheduleNotification(
+          id: notifId,
+          title: 'Pengingat Tugas',
+          body: _judulController.text,
+          scheduledDateTime: deadlineNotif,
+        );
+      }
 
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
@@ -153,6 +235,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           ),
         ),
       );
+      if (widget.onTaskUpdated != null) {
+        widget.onTaskUpdated!();
+      }
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(
@@ -205,6 +290,121 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     );
   }
 
+  Widget _buildLabel(String text, Color color) {
+    return Text(
+      text,
+      style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildTextField(
+    TextEditingController controller,
+    String hint,
+    Color fillColor,
+    Color borderColor,
+  ) {
+    return TextFormField(
+      controller: controller,
+      validator:
+          (value) => value == null || value.isEmpty ? 'Wajib diisi' : null,
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: borderColor),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownKategori(Color fillColor, Color borderColor) {
+    return DropdownButtonFormField<String>(
+      value: _kategori,
+      items:
+          _kategoriOptions.map((String value) {
+            return DropdownMenuItem<String>(value: value, child: Text(value));
+          }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _kategori = newValue;
+        });
+      },
+      validator: (value) => value == null ? 'Wajib dipilih' : null,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: borderColor),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownPrioritas(Color fillColor, Color borderColor) {
+    return DropdownButtonFormField<String>(
+      value: _prioritas,
+      items:
+          _prioritasOptions.map((String value) {
+            return DropdownMenuItem<String>(value: value, child: Text(value));
+          }).toList(),
+      onChanged: (String? newValue) {
+        setState(() {
+          _prioritas = newValue;
+        });
+      },
+      validator: (value) => value == null ? 'Wajib dipilih' : null,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: fillColor,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: borderColor),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatePicker() {
+    return InkWell(
+      onTap: () => _pilihTanggal(context),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          filled: true,
+        ),
+        child: Text(
+          _tanggal == null
+              ? 'Pilih tanggal'
+              : DateFormat('dd MMMM yyyy').format(_tanggal!),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimePicker() {
+    return InkWell(
+      onTap: () => _pilihWaktu(context),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          filled: true,
+        ),
+        child: Text(_waktu == null ? 'Pilih waktu' : _waktu!.format(context)),
+      ),
+    );
+  }
+
+  Widget _buildReminder() {
+    return SwitchListTile(
+      title: const Text('Aktifkan Pengingat'),
+      value: _aturPengingat,
+      onChanged: (val) => setState(() => _aturPengingat = val),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -248,24 +448,20 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 inputColor,
                 borderColor,
               ),
-
               const SizedBox(height: 16),
               _buildLabel('Kategori :', textColor),
               const SizedBox(height: 8),
               _buildDropdownKategori(inputColor, borderColor),
-
               const SizedBox(height: 16),
               _buildLabel('Prioritas :', textColor),
               const SizedBox(height: 8),
               _buildDropdownPrioritas(inputColor, borderColor),
-
               const SizedBox(height: 16),
               _buildLabel('Tanggal :', textColor),
               const SizedBox(height: 8),
               _buildDatePicker(),
               const SizedBox(height: 8),
               _buildTimePicker(),
-
               const SizedBox(height: 16),
               _buildLabel('Status :', textColor),
               const SizedBox(height: 8),
@@ -274,24 +470,20 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                 value: _isCompleted,
                 onChanged: (val) => setState(() => _isCompleted = val),
               ),
-
               const SizedBox(height: 16),
               _buildLabel('Pengingat :', textColor),
               const SizedBox(height: 8),
               _buildReminder(),
-
               const SizedBox(height: 16),
               _buildLabel('Catatan :', textColor),
               const SizedBox(height: 8),
               _buildTextField(
                 _catatanController,
-                'Deskripsi',
+                'Catatan',
                 inputColor,
                 borderColor,
-                maxLines: 5,
               ),
-
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               _buildSaveButton(),
             ],
           ),
@@ -299,227 +491,34 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
+        onTap: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+          final pages = [
+            const AddTaskScreen(),
+            const AllTasksScreen(),
+            const CalendarScreen(),
+            const SettingsScreen(),
+          ];
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => pages[index]),
+          );
+        },
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: ''),
-          BottomNavigationBarItem(icon: Icon(Icons.task_outlined), label: ''),
+          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Tambah'),
+          BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Tugas'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            label: '',
+            icon: Icon(Icons.calendar_today),
+            label: 'Kalender',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: '',
+            icon: Icon(Icons.settings),
+            label: 'Pengaturan',
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLabel(String text, Color color) {
-    return Text(
-      text,
-      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),
-    );
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String hintText,
-    Color fillColor,
-    Color borderColor, {
-    int maxLines = 1,
-  }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hintTextColor = isDark ? Colors.grey[400] : Colors.grey;
-    final inputTextColor = isDark ? Colors.white : Colors.black;
-
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      style: TextStyle(color: inputTextColor),
-      validator:
-          (value) =>
-              value == null || value.isEmpty ? 'Tidak boleh kosong' : null,
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: TextStyle(color: hintTextColor),
-        filled: true,
-        fillColor: fillColor,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: borderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: borderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.blue, width: 2),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdownKategori(Color fillColor, Color borderColor) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hintTextColor = isDark ? Colors.grey[400] : Colors.grey;
-    final itemTextColor = isDark ? Colors.white : Colors.black;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _kategori,
-          isExpanded: true,
-          hint: Text('Pilih Kategori', style: TextStyle(color: hintTextColor)),
-          items: [
-            DropdownMenuItem(
-              value: 'Kerja',
-              child: Text('Kerja', style: TextStyle(color: itemTextColor)),
-            ),
-            DropdownMenuItem(
-              value: 'Pribadi',
-              child: Text('Pribadi', style: TextStyle(color: itemTextColor)),
-            ),
-            DropdownMenuItem(
-              value: 'Belajar',
-              child: Text('Belajar', style: TextStyle(color: itemTextColor)),
-            ),
-          ],
-          onChanged: (val) => setState(() => _kategori = val),
-          dropdownColor: fillColor,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDropdownPrioritas(Color fillColor, Color borderColor) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final hintTextColor = isDark ? Colors.grey[400] : Colors.grey;
-    final itemTextColor = isDark ? Colors.white : Colors.black;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _prioritas,
-          isExpanded: true,
-          hint: Text('Pilih Prioritas', style: TextStyle(color: hintTextColor)),
-          items: [
-            DropdownMenuItem(
-              value: 'Rendah',
-              child: Text('Rendah', style: TextStyle(color: itemTextColor)),
-            ),
-            DropdownMenuItem(
-              value: 'Sedang',
-              child: Text('Sedang', style: TextStyle(color: itemTextColor)),
-            ),
-            DropdownMenuItem(
-              value: 'Tinggi',
-              child: Text('Tinggi', style: TextStyle(color: itemTextColor)),
-            ),
-          ],
-          onChanged: (val) => setState(() => _prioritas = val),
-          dropdownColor: fillColor,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDatePicker() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inputColor = isDark ? Colors.grey[800]! : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
-    final hintTextColor = isDark ? Colors.grey[400] : Colors.grey;
-
-    return GestureDetector(
-      onTap: () => _pilihTanggal(context),
-      child: Container(
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.blue),
-          color: inputColor,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.calendar_today, color: Colors.blue),
-            const SizedBox(width: 10),
-            Text(
-              _tanggal == null
-                  ? 'Pilih Tanggal'
-                  : DateFormat('yyyy-MM-dd').format(_tanggal!),
-              style: TextStyle(
-                fontSize: 16,
-                color: _tanggal == null ? hintTextColor : textColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimePicker() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inputColor = isDark ? Colors.grey[800]! : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black;
-    final hintTextColor = isDark ? Colors.grey[400] : Colors.grey;
-
-    return GestureDetector(
-      onTap: () => _pilihWaktu(context),
-      child: Container(
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        alignment: Alignment.centerLeft,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.blue),
-          color: inputColor,
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.access_time, color: Colors.blue),
-            const SizedBox(width: 10),
-            Text(
-              _waktu == null ? 'Pilih Waktu' : _waktu!.format(context),
-              style: TextStyle(
-                fontSize: 16,
-                color: _waktu == null ? hintTextColor : textColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReminder() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : Colors.black;
-    return SwitchListTile(
-      title: Text('Atur Pengingat', style: TextStyle(color: textColor)),
-      value: _aturPengingat,
-      onChanged: (val) => setState(() => _aturPengingat = val),
     );
   }
 }

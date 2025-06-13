@@ -7,8 +7,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'add_task.dart';
 import '../theme/theme_provider.dart';
 
+// Helper: Capitalize extension
+extension StringCasingExtension on String {
+  String capitalize() =>
+      isEmpty ? '' : '${this[0].toUpperCase()}${substring(1).toLowerCase()}';
+}
+
 class AllTasksScreen extends StatefulWidget {
-  const AllTasksScreen({Key? key}) : super(key: key);
+  const AllTasksScreen({super.key});
 
   @override
   State<AllTasksScreen> createState() => _AllTasksScreenState();
@@ -94,17 +100,19 @@ class Task {
       id: json['id'] ?? 0,
       title: json['title'] ?? 'No Title',
       description: json['description'],
-      category: json['category'],
-      priority: json['priority'],
+      category: (json['category'] as String?)?.toLowerCase(),
+      priority: (json['priority'] as String?)?.toLowerCase(),
       dueDate:
-          json['deadline'] != null ? DateTime.parse(json['deadline']) : null,
+          json['deadline'] != null && json['deadline'] != ""
+              ? DateTime.parse(json['deadline'])
+              : null,
       isCompleted: json['is_completed'] == 1 || json['is_completed'] == true,
     );
   }
 }
 
 class _AllTasksContent extends StatefulWidget {
-  const _AllTasksContent({Key? key}) : super(key: key);
+  const _AllTasksContent({super.key});
 
   @override
   State<_AllTasksContent> createState() => _AllTasksContentState();
@@ -114,7 +122,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
   List<Task> _tasks = [];
   bool _isLoading = true;
   String _errorMessage = '';
-  DateTime? _lastRefreshTime;
 
   @override
   void initState() {
@@ -127,12 +134,10 @@ class _AllTasksContentState extends State<_AllTasksContent> {
   }
 
   Future<void> _loadTasks({bool showSnackbar = false}) async {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
-    }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
 
     try {
       final token = await _getToken();
@@ -148,13 +153,10 @@ class _AllTasksContentState extends State<_AllTasksContent> {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _tasks = data.map((json) => Task.fromJson(json)).toList();
-            _isLoading = false;
-            _lastRefreshTime = DateTime.now();
-          });
-        }
+        setState(() {
+          _tasks = data.map((json) => Task.fromJson(json)).toList();
+          _isLoading = false;
+        });
         if (showSnackbar) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Daftar tugas diperbarui')),
@@ -164,12 +166,10 @@ class _AllTasksContentState extends State<_AllTasksContent> {
         throw Exception('Failed to load tasks: ${response.statusCode}');
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Gagal memuat tugas: $e';
-          _isLoading = false;
-        });
-      }
+      setState(() {
+        _errorMessage = 'Gagal memuat tugas: $e';
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -258,85 +258,13 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       context,
       MaterialPageRoute(builder: (_) => AddTaskScreen(taskToEdit: task)),
     );
-
     if (result == true) {
       await _loadTasks();
     }
   }
 
-  Widget _buildTaskList() {
-    final now = DateTime.now();
-    final lateTasks =
-        _tasks
-            .where(
-              (t) =>
-                  !t.isCompleted &&
-                  t.dueDate != null &&
-                  t.dueDate!.isBefore(now),
-            )
-            .toList();
-    final priorityTasks =
-        _tasks
-            .where(
-              (t) =>
-                  !t.isCompleted &&
-                  (t.dueDate == null || !t.dueDate!.isBefore(now)),
-            )
-            .toList();
-    final completedTasks = _tasks.where((t) => t.isCompleted).toList();
-
-    return ListView(
-      children: [
-        if (lateTasks.isNotEmpty)
-          _TaskSection(
-            title: 'Terlambat',
-            color: Colors.orange,
-            tasks: lateTasks,
-            onToggle: _toggleTaskCompletion,
-            onEdit: _navigateToEditTask,
-            onDelete: _deleteTask,
-          ),
-        if (priorityTasks.isNotEmpty)
-          _TaskSection(
-            title: 'Tugas Prioritas',
-            color: Colors.blue,
-            tasks: priorityTasks,
-            onToggle: _toggleTaskCompletion,
-            onEdit: _navigateToEditTask,
-            onDelete: _deleteTask,
-          ),
-        if (completedTasks.isNotEmpty)
-          _TaskSection(
-            title: 'Tugas Selesai',
-            color: Colors.green,
-            tasks: completedTasks,
-            onToggle: _toggleTaskCompletion,
-            onEdit: _navigateToEditTask,
-            onDelete: _deleteTask,
-          ),
-        if (_tasks.isEmpty)
-          const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.task, size: 60, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  'Tidak ada tugas',
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.currentTheme == ThemeMode.dark;
-
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -357,52 +285,133 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       );
     }
 
-    return RefreshIndicator(onRefresh: _loadTasks, child: _buildTaskList());
-  }
-}
+    // --- FILTER DAN KELOMPOKKAN TUGAS ---
+    final now = DateTime.now();
 
-class _TaskSection extends StatelessWidget {
-  final String title;
-  final Color color;
-  final List<Task> tasks;
-  final Function(Task) onToggle;
-  final Function(Task) onEdit;
-  final Function(int) onDelete;
+    // Tugas Selesai
+    final completedTasks = _tasks.where((t) => t.isCompleted).toList();
 
-  const _TaskSection({
-    required this.title,
-    required this.color,
-    required this.tasks,
-    required this.onToggle,
-    required this.onEdit,
-    required this.onDelete,
-  });
+    // Tugas Terlambat (belum selesai dan deadline sudah lewat)
+    final lateTasks =
+        _tasks
+            .where(
+              (t) =>
+                  !t.isCompleted &&
+                  t.dueDate != null &&
+                  t.dueDate!.isBefore(now),
+            )
+            .toList();
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    // Tugas Prioritas (belum selesai, belum terlambat, prioritas tinggi)
+    final priorityTasks =
+        _tasks
+            .where(
+              (t) =>
+                  !t.isCompleted &&
+                  (t.dueDate == null || t.dueDate!.isAfter(now)) &&
+                  t.priority == 'tinggi',
+            )
+            .toList();
+
+    // Tugas Lainnya (belum selesai, belum terlambat, bukan prioritas tinggi)
+    final otherTasks =
+        _tasks
+            .where(
+              (t) =>
+                  !t.isCompleted &&
+                  (t.dueDate == null || t.dueDate!.isAfter(now)) &&
+                  t.priority != 'tinggi',
+            )
+            .toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadTasks,
+      child: ListView(
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+          // PRIORITAS
+          if (priorityTasks.isNotEmpty) ...[
+            _buildSectionTitle('Prioritas Tinggi', Colors.red),
+            ...priorityTasks.map(
+              (task) => _TaskItem(
+                task: task,
+                onToggle: () => _toggleTaskCompletion(task),
+                onEdit: () => _navigateToEditTask(task),
+                onDelete: () => _deleteTask(task.id),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          ...tasks.map(
-            (task) => _TaskItem(
-              task: task,
-              onToggle: () => onToggle(task),
-              onEdit: () => onEdit(task),
-              onDelete: () => onDelete(task.id),
+          ],
+          // TERLAMBAT
+          if (lateTasks.isNotEmpty) ...[
+            _buildSectionTitle('Terlambat', Colors.orange),
+            ...lateTasks.map(
+              (task) => _TaskItem(
+                task: task,
+                onToggle: () => _toggleTaskCompletion(task),
+                onEdit: () => _navigateToEditTask(task),
+                onDelete: () => _deleteTask(task.id),
+              ),
             ),
-          ),
+          ],
+          // LAINNYA
+          if (otherTasks.isNotEmpty) ...[
+            _buildSectionTitle('Tugas Lainnya', Colors.blue),
+            ...otherTasks.map(
+              (task) => _TaskItem(
+                task: task,
+                onToggle: () => _toggleTaskCompletion(task),
+                onEdit: () => _navigateToEditTask(task),
+                onDelete: () => _deleteTask(task.id),
+              ),
+            ),
+          ],
+          // SELESAI
+          if (completedTasks.isNotEmpty) ...[
+            _buildSectionTitle('Selesai', Colors.green),
+            ...completedTasks.map(
+              (task) => _TaskItem(
+                task: task,
+                onToggle: () => _toggleTaskCompletion(task),
+                onEdit: () => _navigateToEditTask(task),
+                onDelete: () => _deleteTask(task.id),
+              ),
+            ),
+          ],
+
+          if (priorityTasks.isEmpty &&
+              lateTasks.isEmpty &&
+              otherTasks.isEmpty &&
+              completedTasks.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.task, size: 60, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text(
+                      'Tidak ada tugas',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title, Color color) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          color: color,
+        ),
       ),
     );
   }
@@ -430,7 +439,7 @@ class _TaskItem extends StatelessWidget {
             : 'Tanpa deadline';
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
       child: ListTile(
         leading: Checkbox(
           value: task.isCompleted,
@@ -447,8 +456,10 @@ class _TaskItem extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Deadline: $dueDateText'),
-            if (task.category != null) Text('Kategori: ${task.category!}'),
-            if (task.priority != null) Text('Prioritas: ${task.priority!}'),
+            if (task.category != null)
+              Text('Kategori: ${task.category!.capitalize()}'),
+            if (task.priority != null)
+              Text('Prioritas: ${task.priority!.capitalize()}'),
           ],
         ),
         trailing: PopupMenuButton(

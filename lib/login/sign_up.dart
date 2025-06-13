@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'sign_in.dart';
-import 'dart:async';
-import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'sign_in.dart';
+import '../services/api_services.dart'; // Pastikan path ini sesuai struktur proyekmu
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -33,27 +30,14 @@ class _SignUpPageState extends State<SignUpPage> {
     setState(() => _isLoading = true);
 
     try {
-      final url = Uri.parse('http://127.0.0.1:8000/api/register');
-      final response = await http
-          .post(
-            url,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'name': _nameController.text.trim(),
-              'email': _emailController.text.trim().toLowerCase(),
-              'password': _passwordController.text,
-              'password_confirmation': _confirmPasswordController.text,
-            }),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      final responseData = jsonDecode(response.body);
-      print('Response: $responseData');
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      final result = await ApiService.registerUser(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim().toLowerCase(),
+        password: _passwordController.text,
+        passwordConfirmation: _confirmPasswordController.text,
+      );
+      final responseData = result['body'];
+      if (result['status'] == 200 || result['status'] == 201) {
         // Simpan data ke SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('name', _nameController.text.trim());
@@ -62,25 +46,15 @@ class _SignUpPageState extends State<SignUpPage> {
         _showSuccessDialog(context);
       } else {
         String errorMessage = 'Registrasi gagal';
-        if (responseData.containsKey('errors')) {
+        if (responseData is Map && responseData.containsKey('errors')) {
           errorMessage = _parseErrorMessages(responseData['errors']);
-        } else if (responseData.containsKey('message')) {
+        } else if (responseData is Map && responseData.containsKey('message')) {
           errorMessage = responseData['message'];
         }
         throw Exception(errorMessage);
       }
-    } on SocketException {
-      _showErrorSnackbar(
-        'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.',
-      );
-    } on TimeoutException {
-      _showErrorSnackbar('Waktu koneksi habis. Coba lagi nanti.');
-    } on http.ClientException catch (e) {
-      _showErrorSnackbar('Kesalahan jaringan: ${e.message}');
-    } on FormatException {
-      _showErrorSnackbar('Format response tidak valid dari server.');
-    } on Exception catch (e) {
-      _showErrorSnackbar(e.toString());
+    } catch (e) {
+      _showErrorSnackbar(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);

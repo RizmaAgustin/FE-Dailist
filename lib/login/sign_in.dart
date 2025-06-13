@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme_provider.dart';
 import '/screen/home.dart';
 import 'sign_up.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_services.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -78,23 +77,19 @@ class _SignInPageState extends State<SignInPage> {
       isLoading = true;
     });
 
-    final url = Uri.parse('http://127.0.0.1:8000/api/login');
-
     try {
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
+      final result = await ApiService.loginUser(
+        email: email,
+        password: password,
       );
-
       setState(() {
         isLoading = false;
       });
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final token = data['token'];
-        final user = data['user']; // Asumsi API mengembalikan data user
+      final responseData = result['body'];
+      if (result['status'] == 200) {
+        final token = responseData['token'];
+        final user = responseData['user']; // Asumsi API mengembalikan data user
 
         if (token != null) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -118,9 +113,13 @@ class _SignInPageState extends State<SignInPage> {
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login gagal: ${response.reasonPhrase}')),
-        );
+        String errorMsg = "Login gagal";
+        if (responseData is Map && responseData.containsKey('message')) {
+          errorMsg = responseData['message'];
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMsg)));
       }
     } catch (e) {
       setState(() {

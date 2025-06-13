@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
-import 'dart:convert';
+
 import '../theme/theme_provider.dart';
 import 'add_task.dart';
 import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
-import '../services/notification_service.dart';
+import '../services/api_services.dart'; // Pastikan path ini sesuai dengan letak ApiService kamu
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -145,70 +144,62 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     });
   }
 
-  Future<void> _loadTasks() async {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
-    }
-
-    try {
-      final token = await _getToken();
-      final email = await _getEmail();
-      final response = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/tasks?email=$email'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        if (mounted) {
-          setState(() {
-            _tasks = data.map((json) => Task.fromJson(json)).toList();
-            _isLoading = false;
-          });
-        }
-      } else {
-        throw Exception('Failed to load tasks: ${response.statusCode}');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = 'Failed to load tasks: ${e.toString()}';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
-  Future<String?> _getEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('email');
+  Future<void> _loadTasks() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final token = await _getToken();
+      if (token == null) {
+        setState(() {
+          _errorMessage = 'Token login tidak ditemukan.';
+          _isLoading = false;
+        });
+        return;
+      }
+      // Pakai ApiService.fetchTasks
+      final result = await ApiService.fetchTasks(token: token);
+      if (result['status'] == 200) {
+        final List<dynamic> data = result['body'];
+        setState(() {
+          _tasks = data.map((json) => Task.fromJson(json)).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load tasks: ${result['status']}';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load tasks: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _toggleTaskCompletion(Task task) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse(
-          'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
-        ),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+      if (token == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Token login tidak ditemukan.')),
+        );
+        return;
+      }
+      final result = await ApiService.toggleTaskCompletion(
+        token: token,
+        taskId: task.id,
       );
-
-      if (response.statusCode == 200) {
+      if (result['status'] == 200) {
         await _loadTasks();
       } else {
         throw Exception('Failed to toggle completion');
@@ -225,7 +216,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   Future<void> _generatePdf() async {
     final pdf = pw.Document();
 
-    // Add a page with header and table
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -260,20 +250,20 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                   'Status',
                 ],
                 data:
-                    _tasks
-                        .map(
-                          (task) => [
-                            (_tasks.indexOf(task) + 1).toString(),
-                            task.title,
-                            task.category ?? '-',
-                            task.priority ?? '-',
-                            task.dueDate != null
-                                ? DateFormat('yyyy-MM-dd').format(task.dueDate!)
-                                : '-',
-                            task.isCompleted ? 'Completed' : 'Pending',
-                          ],
-                        )
-                        .toList(),
+                    _tasks.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final task = entry.value;
+                      return [
+                        (i + 1).toString(),
+                        task.title,
+                        task.category ?? '-',
+                        task.priority ?? '-',
+                        task.dueDate != null
+                            ? DateFormat('yyyy-MM-dd').format(task.dueDate!)
+                            : '-',
+                        task.isCompleted ? 'Completed' : 'Pending',
+                      ];
+                    }).toList(),
               ),
               pw.SizedBox(height: 20),
               pw.Text('Total Tasks: ${_tasks.length}'),
@@ -285,7 +275,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       ),
     );
 
-    // Save and show the PDF
+    // Tampilkan preview atau print/save PDF
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
     );

@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'add_task.dart';
 import '../theme/theme_provider.dart';
+import '../services/api_services.dart';
 
 // Helper: Capitalize extension
 extension StringCasingExtension on String {
@@ -141,18 +141,9 @@ class _AllTasksContentState extends State<_AllTasksContent> {
 
     try {
       final token = await _getToken();
-      final response = await http.get(
-        Uri.parse(
-          'http://127.0.0.1:8000/api/tasks?email=rizmaagustin66@gmail.com',
-        ),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
+      final result = await ApiService.fetchTasks(token: token ?? '');
+      if (result['status'] == 200) {
+        final List<dynamic> data = result['body'];
         setState(() {
           _tasks = data.map((json) => Task.fromJson(json)).toList();
           _isLoading = false;
@@ -163,7 +154,7 @@ class _AllTasksContentState extends State<_AllTasksContent> {
           );
         }
       } else {
-        throw Exception('Failed to load tasks: ${response.statusCode}');
+        throw Exception('Failed to load tasks: ${result['status']}');
       }
     } catch (e) {
       setState(() {
@@ -184,17 +175,11 @@ class _AllTasksContentState extends State<_AllTasksContent> {
   Future<void> _toggleTaskCompletion(Task task) async {
     try {
       final token = await _getToken();
-      final response = await http.post(
-        Uri.parse(
-          'http://127.0.0.1:8000/api/tasks/${task.id}/toggle-completion',
-        ),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+      final result = await ApiService.toggleTaskCompletion(
+        token: token ?? '',
+        taskId: task.id,
       );
-
-      if (response.statusCode == 200) {
+      if (result['status'] == 200) {
         await _loadTasks();
       } else {
         throw Exception('Failed to toggle completion');
@@ -230,15 +215,11 @@ class _AllTasksContentState extends State<_AllTasksContent> {
 
     try {
       final token = await _getToken();
-      final response = await http.delete(
-        Uri.parse('http://127.0.0.1:8000/api/tasks/$taskId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+      final result = await ApiService.deleteTask(
+        token: token ?? '',
+        taskId: taskId,
       );
-
-      if (response.statusCode == 200) {
+      if (result['status'] == 200) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Tugas berhasil dihapus')));

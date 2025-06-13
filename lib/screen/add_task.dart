@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
 import '../services/notification_service.dart';
+import '../services/api_services.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Task? taskToEdit;
@@ -35,6 +34,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   bool _isCompleted = false;
   int _selectedIndex = 0;
   Timer? _deadlineTimer;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -127,60 +127,34 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     _startDeadlineTimer(deadline);
 
-    final url =
-        widget.taskToEdit == null
-            ? Uri.parse('http://127.0.0.1:8000/api/tasks')
-            : Uri.parse(
-              'http://127.0.0.1:8000/api/tasks/${widget.taskToEdit!.id}',
-            );
-
     final token = await getToken();
+    if (token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Token tidak ditemukan, silakan login ulang.'),
+        ),
+      );
+      return false;
+    }
 
-    // Perhatikan: user_id hanya dikirim saat tambah, TIDAK saat edit.
-    final body =
-        widget.taskToEdit == null
-            ? {
-              'title': _judulController.text,
-              'description': _catatanController.text,
-              'category': _kategori ?? '',
-              'priority': _prioritas ?? '',
-              'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
-              'reminder': _aturPengingat ? '1' : '0',
-              'is_completed': _isCompleted ? '1' : '0',
-            }
-            : {
-              'title': _judulController.text,
-              'description': _catatanController.text,
-              'category': _kategori ?? '',
-              'priority': _prioritas ?? '',
-              'deadline': DateFormat('yyyy-MM-dd HH:mm:ss').format(deadline),
-              'reminder': _aturPengingat ? '1' : '0',
-              'is_completed': _isCompleted ? '1' : '0',
-            };
+    setState(() {
+      _isLoading = true;
+    });
 
     try {
-      final response =
-          widget.taskToEdit == null
-              ? await http.post(
-                url,
-                headers: {
-                  'Authorization': 'Bearer $token',
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-                body: json.encode(body),
-              )
-              : await http.put(
-                url,
-                headers: {
-                  'Authorization': 'Bearer $token',
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                },
-                body: json.encode(body),
-              );
+      final result = await ApiService.saveTask(
+        token: token,
+        taskId: widget.taskToEdit?.id,
+        title: _judulController.text,
+        description: _catatanController.text,
+        category: _kategori ?? '',
+        priority: _prioritas ?? '',
+        deadline: deadline,
+        reminder: _aturPengingat,
+        isCompleted: _isCompleted,
+      );
 
-      if ((response.statusCode == 200 || response.statusCode == 201) &&
+      if ((result['status'] == 200 || result['status'] == 201) &&
           _aturPengingat) {
         final deadlineNotif = DateTime(
           _tanggal!.year,
@@ -200,9 +174,18 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         );
       }
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      setState(() {
+        _isLoading = false;
+      });
+
+      return result['status'] == 200 || result['status'] == 201;
     } catch (e) {
-      debugPrint('Error saving task: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyimpan tugas: $e')));
       return false;
     }
   }
@@ -269,7 +252,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isLoading ? null : _submit,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blue,
             padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 30),
@@ -277,14 +260,24 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
               borderRadius: BorderRadius.circular(50),
             ),
           ),
-          child: const Text(
-            'Simpan',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
+          child:
+              _isLoading
+                  ? const SizedBox(
+                    height: 22,
+                    width: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.5,
+                    ),
+                  )
+                  : const Text(
+                    'Simpan',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
         ),
       ],
     );

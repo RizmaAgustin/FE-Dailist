@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import '../theme/theme_provider.dart';
+import '../services/api_services.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -511,13 +511,7 @@ class SettingsScreen extends StatelessWidget {
 
     try {
       if (token != null) {
-        await http.post(
-          Uri.parse('http://127.0.0.1:8000/api/logout'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-        );
+        await ApiService.logoutUser(token);
       }
       await _clearLocalDataAndNavigate(context);
     } catch (e) {
@@ -530,9 +524,7 @@ class SettingsScreen extends StatelessWidget {
     await prefs.clear();
 
     if (context.mounted) {
-      // Gunakan pushReplacementNamed untuk mengganti seluruh navigasi stack dengan halaman login
       Navigator.pushReplacementNamed(context, '/login');
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Anda telah logout'),

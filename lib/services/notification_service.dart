@@ -1,4 +1,3 @@
-// lib/services/notification_service.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -165,5 +164,18 @@ class NotificationService {
       platformChannelSpecifics,
       payload: body,
     );
+  }
+
+  // ---- Tambahan untuk setting screen ----
+  /// Cek izin notifikasi (dummy, return true agar switch tidak error)
+  static Future<bool> areNotificationsEnabled() async {
+    // Untuk saat ini, switch selalu aktif.
+    return true;
+  }
+
+  /// Minta izin notifikasi (untuk Android 13+, iOS, dll)
+  static Future<void> requestPermission() async {
+    // Untuk saat ini, biarkan kosong agar tidak error di UI.
+    // Jika ingin support permission_handler, bisa isi di sini.
   }
 }

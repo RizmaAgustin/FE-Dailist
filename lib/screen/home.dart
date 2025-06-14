@@ -12,6 +12,7 @@ import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
 import '../services/api_services.dart'; // Pastikan path ini sesuai dengan letak ApiService kamu
+import '../services/notification_service.dart'; // Import NotificationService
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -201,6 +202,16 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       );
       if (result['status'] == 200) {
         await _loadTasks();
+
+        // NOTIFIKASI: Tampilkan notifikasi instant ketika status tugas diubah
+        await NotificationService.showInstantNotification(
+          id: task.id,
+          title:
+              task.isCompleted
+                  ? 'Tugas Ditandai Belum Selesai'
+                  : 'Tugas Selesai',
+          body: 'Tugas: ${task.title}',
+        );
       } else {
         throw Exception('Failed to toggle completion');
       }
@@ -595,6 +606,21 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 heroTag: 'pdf',
                 shape: const CircleBorder(),
                 child: const Icon(Icons.picture_as_pdf, color: Colors.white),
+              ),
+              const SizedBox(width: 16.0),
+              // Contoh tombol demo notifikasi langsung
+              FloatingActionButton(
+                onPressed: () {
+                  NotificationService.showInstantNotification(
+                    id: 99999,
+                    title: 'Notifikasi Demo',
+                    body: 'Ini contoh notifikasi langsung dari Home!',
+                  );
+                },
+                backgroundColor: Colors.orange,
+                heroTag: 'notifDemo',
+                shape: const CircleBorder(),
+                child: const Icon(Icons.notifications, color: Colors.white),
               ),
             ],
           ),

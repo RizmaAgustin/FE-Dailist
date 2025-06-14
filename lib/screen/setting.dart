@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme_provider.dart';
 import '../services/api_services.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -80,7 +81,12 @@ class SettingsScreen extends StatelessWidget {
                   textColor,
                 ),
                 const SizedBox(height: 24),
-                _buildNotificationSection(isDark, cardColor, textColor),
+                _buildNotificationSection(
+                  isDark,
+                  cardColor,
+                  textColor,
+                  context,
+                ),
                 const SizedBox(height: 24),
                 _buildLogoutSection(context, isDark),
                 const SizedBox(height: 40),
@@ -162,6 +168,7 @@ class SettingsScreen extends StatelessWidget {
     bool isDark,
     Color cardColor,
     Color textColor,
+    BuildContext context,
   ) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -175,7 +182,41 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(width: 16),
           Text('Notifikasi', style: TextStyle(fontSize: 16, color: textColor)),
           const Spacer(),
-          Switch(value: true, onChanged: (value) {}, activeColor: Colors.blue),
+          FutureBuilder<bool>(
+            future: NotificationService.areNotificationsEnabled(),
+            builder: (context, snapshot) {
+              final enabled = snapshot.data ?? true;
+              return Switch(
+                value: enabled,
+                onChanged: (value) async {
+                  if (value) {
+                    await NotificationService.requestPermission();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Notifikasi diaktifkan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  } else {
+                    await NotificationService.cancelAllNotifications();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Semua notifikasi dinonaktifkan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  }
+                },
+                activeColor: Colors.blue,
+              );
+            },
+          ),
         ],
       ),
     );
@@ -513,8 +554,11 @@ class SettingsScreen extends StatelessWidget {
       if (token != null) {
         await ApiService.logoutUser(token);
       }
+      // Cancel semua notifikasi saat logout
+      await NotificationService.cancelAllNotifications();
       await _clearLocalDataAndNavigate(context);
     } catch (e) {
+      await NotificationService.cancelAllNotifications();
       await _clearLocalDataAndNavigate(context);
     }
   }

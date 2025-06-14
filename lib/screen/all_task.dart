@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'add_task.dart';
 import '../theme/theme_provider.dart';
 import '../services/api_services.dart';
+import '../services/notification_service.dart'; // Tambahkan import untuk notifikasi
 
 // Helper: Capitalize extension
 extension StringCasingExtension on String {
@@ -181,6 +182,16 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       );
       if (result['status'] == 200) {
         await _loadTasks();
+
+        // Tampilkan notifikasi instant ketika status tugas diubah
+        await NotificationService.showInstantNotification(
+          id: task.id,
+          title:
+              task.isCompleted
+                  ? 'Tugas Ditandai Belum Selesai'
+                  : 'Tugas Selesai',
+          body: 'Tugas: ${task.title}',
+        );
       } else {
         throw Exception('Failed to toggle completion');
       }
@@ -220,6 +231,9 @@ class _AllTasksContentState extends State<_AllTasksContent> {
         taskId: taskId,
       );
       if (result['status'] == 200) {
+        // Batalkan notifikasi terkait tugas yang dihapus
+        await NotificationService.cancelNotification(taskId);
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Tugas berhasil dihapus')));

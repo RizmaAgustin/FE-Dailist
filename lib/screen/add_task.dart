@@ -154,6 +154,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         isCompleted: _isCompleted,
       );
 
+      // Notifikasi: hanya jika pengingat diaktifkan
       if ((result['status'] == 200 || result['status'] == 201) &&
           _aturPengingat) {
         final deadlineNotif = DateTime(
@@ -164,7 +165,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           _waktu!.minute,
         );
 
-        final notifId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        // Gunakan id unik (bisa dari API jika ada, atau timestamp)
+        final notifId =
+            widget.taskToEdit?.id ??
+            DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
         await NotificationService.scheduleNotification(
           id: notifId,

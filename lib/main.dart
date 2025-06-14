@@ -8,7 +8,7 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await NotificationService.initialize(); // <--- Inisialisasi notifikasi
+  await NotificationService.initialize(); // Inisialisasi notifikasi WAJIB sebelum runApp
 
   await initializeDateFormatting('id_ID', null);
 
@@ -32,9 +32,8 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: ThemeData.light(),
           darkTheme: ThemeData.dark(),
-          themeMode:
-              themeProvider.currentTheme, // Gunakan langsung currentTheme
-          navigatorKey: navigatorKey, // ini penting!
+          themeMode: themeProvider.currentTheme,
+          navigatorKey: navigatorKey, // Untuk notifikasi dan dialog global
           home: OnboardingScreen(),
         );
       },
@@ -95,7 +94,7 @@ class OnboardingScreen extends StatelessWidget {
               SizedBox(
                 width: size.width * 0.35,
                 height: size.width * 0.35,
-                child: Image.asset('assets/logo.png', fit: BoxFit.contain),
+                child: Image.asset('assets/dailist.png', fit: BoxFit.contain),
               ),
             ],
           ),

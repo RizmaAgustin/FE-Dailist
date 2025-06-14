@@ -11,8 +11,8 @@ import 'add_task.dart';
 import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
-import '../services/api_services.dart'; // Pastikan path ini sesuai dengan letak ApiService kamu
-import '../services/notification_service.dart'; // Import NotificationService
+import '../services/api_services.dart';
+import '../services/notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -165,7 +165,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         });
         return;
       }
-      // Pakai ApiService.fetchTasks
       final result = await ApiService.fetchTasks(token: token);
       if (result['status'] == 200) {
         final List<dynamic> data = result['body'];
@@ -188,34 +187,85 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
   }
 
   Future<void> _toggleTaskCompletion(Task task) async {
+    final wasCompleted = task.isCompleted;
+    setState(() {
+      _tasks =
+          _tasks.map((t) {
+            if (t.id == task.id) {
+              return Task(
+                id: t.id,
+                title: t.title,
+                description: t.description,
+                category: t.category,
+                priority: t.priority,
+                dueDate: t.dueDate,
+                createdAt: t.createdAt,
+                isCompleted: !t.isCompleted,
+              );
+            }
+            return t;
+          }).toList();
+    });
+
     try {
       final token = await _getToken();
       if (token == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Token login tidak ditemukan.')),
         );
+        setState(() {
+          _tasks =
+              _tasks.map((t) {
+                if (t.id == task.id) {
+                  return Task(
+                    id: t.id,
+                    title: t.title,
+                    description: t.description,
+                    category: t.category,
+                    priority: t.priority,
+                    dueDate: t.dueDate,
+                    createdAt: t.createdAt,
+                    isCompleted: wasCompleted,
+                  );
+                }
+                return t;
+              }).toList();
+        });
         return;
       }
       final result = await ApiService.toggleTaskCompletion(
         token: token,
         taskId: task.id,
+        isCompleted: !task.isCompleted,
       );
-      if (result['status'] == 200) {
-        await _loadTasks();
-
-        // NOTIFIKASI: Tampilkan notifikasi instant ketika status tugas diubah
-        await NotificationService.showInstantNotification(
-          id: task.id,
-          title:
-              task.isCompleted
-                  ? 'Tugas Ditandai Belum Selesai'
-                  : 'Tugas Selesai',
-          body: 'Tugas: ${task.title}',
-        );
-      } else {
-        throw Exception('Failed to toggle completion');
+      if (result['status'] != 200) {
+        print('Response error: ${result['body']}');
+        throw Exception('Failed to toggle completion: ${result['body']}');
       }
+      await NotificationService.showInstantNotification(
+        id: task.id,
+        title: wasCompleted ? 'Tugas Ditandai Belum Selesai' : 'Tugas Selesai',
+        body: 'Tugas: ${task.title}',
+      );
     } catch (e) {
+      setState(() {
+        _tasks =
+            _tasks.map((t) {
+              if (t.id == task.id) {
+                return Task(
+                  id: t.id,
+                  title: t.title,
+                  description: t.description,
+                  category: t.category,
+                  priority: t.priority,
+                  dueDate: t.dueDate,
+                  createdAt: t.createdAt,
+                  isCompleted: wasCompleted,
+                );
+              }
+              return t;
+            }).toList();
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to change status: ${e.toString()}')),
@@ -286,7 +336,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       ),
     );
 
-    // Tampilkan preview atau print/save PDF
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
     );
@@ -378,7 +427,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         isDark ? const Color(0xFF303030) : const Color(0xFFEDF7FE);
     final cardColor = isDark ? Colors.grey[800]! : Colors.white;
     final textColor = isDark ? Colors.white : Colors.black87;
-    final secondaryTextColor = isDark ? Colors.grey[400]! : Colors.grey;
+    final secondaryTextColor = isDark ? Colors.grey[400]! : Colors.blue;
 
     final categoryCounts = {
       'Kerja':
@@ -608,7 +657,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 child: const Icon(Icons.picture_as_pdf, color: Colors.white),
               ),
               const SizedBox(width: 16.0),
-              // Contoh tombol demo notifikasi langsung
               FloatingActionButton(
                 onPressed: () {
                   NotificationService.showInstantNotification(

@@ -10,37 +10,70 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // Inisialisasi notifikasi
+  /// Inisialisasi notifikasi dan minta permission
   static Future<void> initialize() async {
-    // Initialize timezone
     tz.initializeTimeZones();
     tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
 
-    // Setup initialization settings untuk Android
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
+    final DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings(
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
 
     final InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsIOS,
+        );
 
-    // Initialize plugin
     await _notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle ketika notifikasi di-tap
         if (response.payload != null) {
           _showNotificationDialog(response.payload!);
         }
       },
     );
+    await requestPermission();
+    print('DEBUG: NotificationService initialized!');
   }
 
-  // Menampilkan dialog dari payload notifikasi
+  /// Permission notifikasi Android 13+ dan iOS
+  static Future<void> requestPermission() async {
+    // Android 13+ (API 33+)
+    final androidImplementation =
+        _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+    await androidImplementation?.requestNotificationsPermission();
+
+    // iOS
+    final iosImplementation =
+        _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >();
+    await iosImplementation?.requestPermissions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    print('DEBUG: Notification permission requested');
+  }
+
+  // Tampilkan dialog jika notifikasi diklik saat app foreground
   static void _showNotificationDialog(String payload) {
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
+    final context = navigatorKey.currentState?.overlay?.context;
+    if (context != null) {
+      showDialog(
+        context: context,
         builder:
-            (context) => AlertDialog(
+            (_) => AlertDialog(
               title: const Text('Pengingat Tugas'),
               content: Text(payload),
               actions: [
@@ -50,132 +83,124 @@ class NotificationService {
                 ),
               ],
             ),
-        fullscreenDialog: true,
-      ),
-    );
+      );
+    }
   }
 
-  // Menjadwalkan notifikasi utama dan notifikasi pengingat 1 menit sebelumnya
+  /// Jadwalkan dua notifikasi: 5 menit sebelum deadline & tepat saat deadline
   static Future<void> scheduleNotification({
     required int id,
     required String title,
     required String body,
     required DateTime scheduledDateTime,
   }) async {
+    print(
+      'DEBUG: MASUK scheduleNotification dengan id: $id, title: $title, waktu: $scheduledDateTime',
+    );
     try {
-      // Konversi ke timezone lokal
       final tz.TZDateTime scheduledDate = tz.TZDateTime.from(
         scheduledDateTime,
         tz.local,
       );
+      print('Menjadwalkan notifikasi deadline pada: $scheduledDate');
 
-      // Setup detail notifikasi untuk Android
-      const AndroidNotificationDetails androidPlatformChannelSpecifics =
-          AndroidNotificationDetails(
-            'task_channel_id', // Channel ID
-            'Task Notifications', // Channel name
-            channelDescription: 'Pengingat tugas dan deadline',
-            importance: Importance.max,
-            priority: Priority.high,
-            showWhen: true,
-          );
-
-      // Detail notifikasi
-      const NotificationDetails platformChannelSpecifics = NotificationDetails(
-        android: androidPlatformChannelSpecifics,
-      );
-
-      // Jadwalkan notifikasi utama pada waktu deadline
+      // Notifikasi utama (tepat saat deadline)
       await _notificationsPlugin.zonedSchedule(
         id,
         title,
         body,
         scheduledDate,
-        platformChannelSpecifics,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: body, // Payload untuk dialog
-      );
-
-      // Jadwalkan notifikasi pengingat 1 menit sebelum deadline
-      final tz.TZDateTime reminderDate = scheduledDate.subtract(
-        const Duration(minutes: 1),
-      );
-
-      await _notificationsPlugin.zonedSchedule(
-        id + 1000, // ID berbeda untuk notifikasi pengingat
-        'Pengingat: $title',
-        'Deadline dalam 1 menit: $body',
-        reminderDate,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'task_reminder_channel_id',
-            'Task Reminder Notifications',
-            channelDescription: 'Pengingat 1 menit sebelum deadline',
+            'task_channel_id',
+            'Task Notifications',
+            channelDescription: 'Pengingat tugas dan deadline',
             importance: Importance.max,
             priority: Priority.high,
             showWhen: true,
           ),
+          iOS: DarwinNotificationDetails(),
         ),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        payload: 'Deadline dalam 1 menit: $body',
+        payload: '$title\n$body',
       );
-    } catch (e) {
-      debugPrint('Error scheduling notification: $e');
+
+      // Notifikasi 5 menit sebelum deadline
+      final tz.TZDateTime reminderDate = scheduledDate.subtract(
+        const Duration(minutes: 5),
+      );
+      print(
+        'Menjadwalkan notifikasi 5 menit sebelum pada: $reminderDate (now: ${tz.TZDateTime.now(tz.local)})',
+      );
+
+      if (reminderDate.isAfter(tz.TZDateTime.now(tz.local))) {
+        await _notificationsPlugin.zonedSchedule(
+          id + 1000,
+          'Pengingat: $title',
+          'Deadline dalam 5 menit: $body',
+          reminderDate,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'task_channel_id',
+              'Task Notifications',
+              channelDescription: 'Pengingat tugas dan deadline',
+              importance: Importance.max,
+              priority: Priority.high,
+              showWhen: true,
+            ),
+            iOS: DarwinNotificationDetails(),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          payload: 'Deadline dalam 5 menit: $title\n$body',
+        );
+      } else {
+        print(
+          'Notifikasi 5 menit sebelum TIDAK dijadwalkan karena waktunya sudah lewat!',
+        );
+      }
+    } catch (e, s) {
+      print('Error scheduling notification: $e\n$s');
     }
   }
 
-  // Membatalkan notifikasi berdasarkan ID
   static Future<void> cancelNotification(int id) async {
     await _notificationsPlugin.cancel(id);
-    await _notificationsPlugin.cancel(
-      id + 1000,
-    ); // Batalkan juga notifikasi pengingat
+    await _notificationsPlugin.cancel(id + 1000); // Batalkan juga reminder
+    print('DEBUG: Notifikasi dengan id $id dan ${id + 1000} dibatalkan');
   }
 
-  // Membatalkan semua notifikasi
   static Future<void> cancelAllNotifications() async {
     await _notificationsPlugin.cancelAll();
+    print('DEBUG: Semua notifikasi dibatalkan');
   }
 
-  // Menampilkan notifikasi langsung (tanpa jadwal)
   static Future<void> showInstantNotification({
     required int id,
     required String title,
     required String body,
   }) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
+    await _notificationsPlugin.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
           'instant_channel_id',
           'Instant Notifications',
           channelDescription: 'Notifikasi langsung tanpa jadwal',
           importance: Importance.max,
           priority: Priority.high,
           showWhen: true,
-        );
-
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      payload: '$title\n$body',
     );
-
-    await _notificationsPlugin.show(
-      id,
-      title,
-      body,
-      platformChannelSpecifics,
-      payload: body,
-    );
+    print('DEBUG: showInstantNotification tampil dengan id: $id');
   }
 
-  // ---- Tambahan untuk setting screen ----
-  /// Cek izin notifikasi (dummy, return true agar switch tidak error)
   static Future<bool> areNotificationsEnabled() async {
-    // Untuk saat ini, switch selalu aktif.
+    // Untuk Android/iOS bisa tambahkan pengecekan lebih lanjut jika ingin
     return true;
-  }
-
-  /// Minta izin notifikasi (untuk Android 13+, iOS, dll)
-  static Future<void> requestPermission() async {
-    // Untuk saat ini, biarkan kosong agar tidak error di UI.
-    // Jika ingin support permission_handler, bisa isi di sini.
   }
 }

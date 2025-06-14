@@ -58,7 +58,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
             : _prioritasOptions.first;
     _isCompleted = task.isCompleted;
     _aturPengingat = task.dueDate != null;
-
     if (task.dueDate != null) {
       _tanggal = task.dueDate;
       _waktu = TimeOfDay.fromDateTime(task.dueDate!);
@@ -115,8 +114,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   Future<bool> saveTask() async {
-    if (_tanggal == null || _waktu == null) return false;
-
+    if (_tanggal == null || _waktu == null) {
+      return false;
+    }
     final deadline = DateTime(
       _tanggal!.year,
       _tanggal!.month,
@@ -124,7 +124,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _waktu!.hour,
       _waktu!.minute,
     );
-
     _startDeadlineTimer(deadline);
 
     final token = await getToken();
@@ -151,10 +150,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         priority: _prioritas ?? '',
         deadline: deadline,
         reminder: _aturPengingat,
-        isCompleted: _isCompleted,
+        isCompleted: _isCompleted, // <-- PASTIKAN DIKIRIM
       );
-
-      // Notifikasi: hanya jika pengingat diaktifkan
       if ((result['status'] == 200 || result['status'] == 201) &&
           _aturPengingat) {
         final deadlineNotif = DateTime(
@@ -164,24 +161,20 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           _waktu!.hour,
           _waktu!.minute,
         );
-
-        // Gunakan id unik (bisa dari API jika ada, atau timestamp)
         final notifId =
             widget.taskToEdit?.id ??
             DateTime.now().millisecondsSinceEpoch ~/ 1000;
-
         await NotificationService.scheduleNotification(
           id: notifId,
           title: 'Pengingat Tugas',
-          body: _judulController.text,
+          body:
+              '${_judulController.text}${_catatanController.text.isNotEmpty ? " - ${_catatanController.text}" : ""}',
           scheduledDateTime: deadlineNotif,
         );
       }
-
       setState(() {
         _isLoading = false;
       });
-
       return result['status'] == 200 || result['status'] == 201;
     } catch (e) {
       setState(() {
@@ -209,7 +202,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       );
       return;
     }
-
     final success = await saveTask();
 
     if (success) {

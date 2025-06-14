@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'add_task.dart';
 import '../theme/theme_provider.dart';
 import '../services/api_services.dart';
-import '../services/notification_service.dart'; // Tambahkan import untuk notifikasi
+import '../services/notification_service.dart';
 
 // Helper: Capitalize extension
 extension StringCasingExtension on String {
@@ -174,31 +174,64 @@ class _AllTasksContentState extends State<_AllTasksContent> {
   }
 
   Future<void> _toggleTaskCompletion(Task task) async {
+    final wasCompleted = task.isCompleted;
+    setState(() {
+      _tasks =
+          _tasks.map((t) {
+            if (t.id == task.id) {
+              return Task(
+                id: t.id,
+                title: t.title,
+                description: t.description,
+                category: t.category,
+                priority: t.priority,
+                dueDate: t.dueDate,
+                isCompleted: !t.isCompleted,
+              );
+            }
+            return t;
+          }).toList();
+    });
+
     try {
       final token = await _getToken();
       final result = await ApiService.toggleTaskCompletion(
         token: token ?? '',
         taskId: task.id,
+        isCompleted:
+            !task
+                .isCompleted, // <--- INI WAJIB, agar backend update is_completed
       );
-      if (result['status'] == 200) {
-        await _loadTasks();
-
-        // Tampilkan notifikasi instant ketika status tugas diubah
-        await NotificationService.showInstantNotification(
-          id: task.id,
-          title:
-              task.isCompleted
-                  ? 'Tugas Ditandai Belum Selesai'
-                  : 'Tugas Selesai',
-          body: 'Tugas: ${task.title}',
-        );
-      } else {
-        throw Exception('Failed to toggle completion');
+      if (result['status'] != 200) {
+        print('Response error: ${result['body']}');
+        throw Exception('Failed to toggle completion: ${result['body']}');
       }
+      await NotificationService.showInstantNotification(
+        id: task.id,
+        title: wasCompleted ? 'Tugas Ditandai Belum Selesai' : 'Tugas Selesai',
+        body: 'Tugas: ${task.title}',
+      );
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Gagal mengubah status: $e')));
+      setState(() {
+        _tasks =
+            _tasks.map((t) {
+              if (t.id == task.id) {
+                return Task(
+                  id: t.id,
+                  title: t.title,
+                  description: t.description,
+                  category: t.category,
+                  priority: t.priority,
+                  dueDate: t.dueDate,
+                  isCompleted: wasCompleted,
+                );
+              }
+              return t;
+            }).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to change status: ${e.toString()}')),
+      );
     }
   }
 
@@ -231,7 +264,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
         taskId: taskId,
       );
       if (result['status'] == 200) {
-        // Batalkan notifikasi terkait tugas yang dihapus
         await NotificationService.cancelNotification(taskId);
 
         ScaffoldMessenger.of(
@@ -280,13 +312,9 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       );
     }
 
-    // --- FILTER DAN KELOMPOKKAN TUGAS ---
     final now = DateTime.now();
 
-    // Tugas Selesai
     final completedTasks = _tasks.where((t) => t.isCompleted).toList();
-
-    // Tugas Terlambat (belum selesai dan deadline sudah lewat)
     final lateTasks =
         _tasks
             .where(
@@ -296,8 +324,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
                   t.dueDate!.isBefore(now),
             )
             .toList();
-
-    // Tugas Prioritas (belum selesai, belum terlambat, prioritas tinggi)
     final priorityTasks =
         _tasks
             .where(
@@ -307,8 +333,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
                   t.priority == 'tinggi',
             )
             .toList();
-
-    // Tugas Lainnya (belum selesai, belum terlambat, bukan prioritas tinggi)
     final otherTasks =
         _tasks
             .where(
@@ -323,7 +347,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
       onRefresh: _loadTasks,
       child: ListView(
         children: [
-          // PRIORITAS
           if (priorityTasks.isNotEmpty) ...[
             _buildSectionTitle('Prioritas Tinggi', Colors.red),
             ...priorityTasks.map(
@@ -335,7 +358,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
               ),
             ),
           ],
-          // TERLAMBAT
           if (lateTasks.isNotEmpty) ...[
             _buildSectionTitle('Terlambat', Colors.orange),
             ...lateTasks.map(
@@ -347,7 +369,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
               ),
             ),
           ],
-          // LAINNYA
           if (otherTasks.isNotEmpty) ...[
             _buildSectionTitle('Tugas Lainnya', Colors.blue),
             ...otherTasks.map(
@@ -359,7 +380,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
               ),
             ),
           ],
-          // SELESAI
           if (completedTasks.isNotEmpty) ...[
             _buildSectionTitle('Selesai', Colors.green),
             ...completedTasks.map(
@@ -371,7 +391,6 @@ class _AllTasksContentState extends State<_AllTasksContent> {
               ),
             ),
           ],
-
           if (priorityTasks.isEmpty &&
               lateTasks.isEmpty &&
               otherTasks.isEmpty &&

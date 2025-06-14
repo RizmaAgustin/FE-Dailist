@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 class ApiService {
-  // Ganti sesuai kebutuhan (emulator, device, production)
   static const String baseUrl = 'http://192.168.1.3:8000/api';
 
   // SIGN UP
@@ -147,19 +146,22 @@ class ApiService {
     }
   }
 
-  // Toggle task completion
+  // Toggle task completion - sesuai dengan route Laravel-mu
   static Future<Map<String, dynamic>> toggleTaskCompletion({
     required String token,
     required int taskId,
+    required bool isCompleted,
   }) async {
-    final url = Uri.parse('$baseUrl/tasks/$taskId/toggle-completion');
+    final url = Uri.parse('$baseUrl/tasks/$taskId');
     try {
-      final response = await http.post(
+      final response = await http.put(
         url,
         headers: {
           'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
+        body: jsonEncode({'is_completed': isCompleted ? '1' : '0'}),
       );
       return {
         'status': response.statusCode,
@@ -193,7 +195,7 @@ class ApiService {
     }
   }
 
-  // Logout user (tambahan untuk konsistensi SettingsScreen)
+  // Logout user
   static Future<void> logoutUser(String token) async {
     final url = Uri.parse('$baseUrl/logout');
     try {
@@ -204,8 +206,6 @@ class ApiService {
           'Accept': 'application/json',
         },
       );
-    } catch (_) {
-      // Boleh diabaikan error logout, tetap lanjut hapus local session
-    }
+    } catch (_) {}
   }
 }

@@ -656,20 +656,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 shape: const CircleBorder(),
                 child: const Icon(Icons.picture_as_pdf, color: Colors.white),
               ),
-              const SizedBox(width: 16.0),
-              FloatingActionButton(
-                onPressed: () {
-                  NotificationService.showInstantNotification(
-                    id: 99999,
-                    title: 'Notifikasi Demo',
-                    body: 'Ini contoh notifikasi langsung dari Home!',
-                  );
-                },
-                backgroundColor: Colors.orange,
-                heroTag: 'notifDemo',
-                shape: const CircleBorder(),
-                child: const Icon(Icons.notifications, color: Colors.white),
-              ),
+              // Lonceng notifikasi manual DIHILANGKAN
             ],
           ),
         ),

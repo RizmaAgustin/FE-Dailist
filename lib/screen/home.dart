@@ -656,7 +656,52 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 shape: const CircleBorder(),
                 child: const Icon(Icons.picture_as_pdf, color: Colors.white),
               ),
-              // Lonceng notifikasi manual DIHILANGKAN
+              const SizedBox(width: 16.0),
+              // Tombol tes notifikasi instan
+              FloatingActionButton(
+                onPressed: () async {
+                  await NotificationService.showInstantNotification(
+                    id: 888,
+                    title: 'Tes Notif Instan',
+                    body: 'Notifikasi instan berhasil!',
+                  );
+                },
+                backgroundColor: Colors.orange,
+                heroTag: 'test_instant',
+                shape: const CircleBorder(),
+                child: const Icon(
+                  Icons.notifications_active,
+                  color: Colors.white,
+                ),
+                tooltip: 'Tes Notif Instan',
+              ),
+              const SizedBox(width: 16.0),
+              // Tombol tes notifikasi reminder 10 detik lagi
+              FloatingActionButton(
+                onPressed: () async {
+                  final target = DateTime.now().add(
+                    const Duration(seconds: 10),
+                  );
+                  await NotificationService.scheduleNotification(
+                    id: 999,
+                    title: 'Tes Reminder',
+                    body: 'Reminder ini muncul 10 detik dari sekarang.',
+                    scheduledDateTime: target,
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Reminder 10 detik dari sekarang dijadwalkan!',
+                      ),
+                    ),
+                  );
+                },
+                backgroundColor: Colors.green,
+                heroTag: 'test_reminder2',
+                shape: const CircleBorder(),
+                child: const Icon(Icons.timer, color: Colors.white),
+                tooltip: 'Tes Reminder 10 Detik',
+              ),
             ],
           ),
         ),

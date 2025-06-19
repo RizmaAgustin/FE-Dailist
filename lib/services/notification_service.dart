@@ -87,7 +87,7 @@ class NotificationService {
     }
   }
 
-  /// Jadwalkan dua notifikasi: 5 menit sebelum deadline & tepat saat deadline
+  /// Jadwalkan hanya notifikasi tepat saat deadline (tanpa 5 menit sebelumnya)
   static Future<void> scheduleNotification({
     required int id,
     required String title,
@@ -124,40 +124,6 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         payload: '$title\n$body',
       );
-
-      // Notifikasi 5 menit sebelum deadline
-      final tz.TZDateTime reminderDate = scheduledDate.subtract(
-        const Duration(minutes: 5),
-      );
-      print(
-        'Menjadwalkan notifikasi 5 menit sebelum pada: $reminderDate (now: ${tz.TZDateTime.now(tz.local)})',
-      );
-
-      if (reminderDate.isAfter(tz.TZDateTime.now(tz.local))) {
-        await _notificationsPlugin.zonedSchedule(
-          id + 1000,
-          'Pengingat: $title',
-          'Deadline dalam 5 menit: $body',
-          reminderDate,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'task_channel_id',
-              'Task Notifications',
-              channelDescription: 'Pengingat tugas dan deadline',
-              importance: Importance.max,
-              priority: Priority.high,
-              showWhen: true,
-            ),
-            iOS: DarwinNotificationDetails(),
-          ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          payload: 'Deadline dalam 5 menit: $title\n$body',
-        );
-      } else {
-        print(
-          'Notifikasi 5 menit sebelum TIDAK dijadwalkan karena waktunya sudah lewat!',
-        );
-      }
     } catch (e, s) {
       print('Error scheduling notification: $e\n$s');
     }
@@ -165,8 +131,7 @@ class NotificationService {
 
   static Future<void> cancelNotification(int id) async {
     await _notificationsPlugin.cancel(id);
-    await _notificationsPlugin.cancel(id + 1000); // Batalkan juga reminder
-    print('DEBUG: Notifikasi dengan id $id dan ${id + 1000} dibatalkan');
+    print('DEBUG: Notifikasi dengan id $id dibatalkan');
   }
 
   static Future<void> cancelAllNotifications() async {

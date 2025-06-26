@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.43.248:8000/api';
+  static const String baseUrl = 'https://dailistapp.sbs/api';
 
   // SIGN UP
   static Future<Map<String, dynamic>> registerUser({

@@ -114,9 +114,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   Future<bool> saveTask() async {
-    if (_tanggal == null || _waktu == null) {
-      return false;
-    }
+    if (_tanggal == null || _waktu == null) return false;
+
     final deadline = DateTime(
       _tanggal!.year,
       _tanggal!.month,
@@ -124,6 +123,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       _waktu!.hour,
       _waktu!.minute,
     );
+
     _startDeadlineTimer(deadline);
 
     final token = await getToken();
@@ -136,9 +136,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       return false;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final result = await ApiService.saveTask(
@@ -150,36 +148,38 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         priority: _prioritas ?? '',
         deadline: deadline,
         reminder: _aturPengingat,
-        isCompleted: _isCompleted, // <-- PASTIKAN DIKIRIM
+        isCompleted: _isCompleted,
       );
+
+      // ✅ Tambahkan pemanggilan izin dan penjadwalan notifikasi
       if ((result['status'] == 200 || result['status'] == 201) &&
           _aturPengingat) {
-        final deadlineNotif = DateTime(
-          _tanggal!.year,
-          _tanggal!.month,
-          _tanggal!.day,
-          _waktu!.hour,
-          _waktu!.minute,
-        );
         final notifId =
             widget.taskToEdit?.id ??
             DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+        // 🛑 Minta izin exact alarm dulu
+        await NotificationService.requestExactAlarmPermissionWithDialog(
+          context,
+        );
+
+        // 🟢 Jadwalkan notifikasi
         await NotificationService.scheduleNotification(
           id: notifId,
           title: 'Pengingat Tugas',
           body:
-              '${_judulController.text}${_catatanController.text.isNotEmpty ? " - ${_catatanController.text}" : ""}',
-          scheduledDateTime: deadlineNotif,
+              _catatanController.text.isNotEmpty
+                  ? '${_judulController.text} - ${_catatanController.text}'
+                  : _judulController.text,
+          scheduledDateTime: deadline,
+          context: context, // ini penting!
         );
       }
-      setState(() {
-        _isLoading = false;
-      });
+
+      setState(() => _isLoading = false);
       return result['status'] == 200 || result['status'] == 201;
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Gagal menyimpan tugas: $e')));
@@ -194,16 +194,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         _tanggal == null ||
         _waktu == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Harap isi semua field dan pilih kategori, prioritas, tanggal, dan waktu.',
-          ),
-        ),
+        const SnackBar(content: Text('Harap lengkapi semua field.')),
       );
       return;
     }
-    final success = await saveTask();
 
+    final success = await saveTask();
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -214,9 +210,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
           ),
         ),
       );
-      if (widget.onTaskUpdated != null) {
-        widget.onTaskUpdated!();
-      }
+      widget.onTaskUpdated?.call();
       Navigator.pop(context, true);
     } else {
       ScaffoldMessenger.of(
@@ -312,14 +306,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return DropdownButtonFormField<String>(
       value: _kategori,
       items:
-          _kategoriOptions.map((String value) {
-            return DropdownMenuItem<String>(value: value, child: Text(value));
-          }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _kategori = newValue;
-        });
-      },
+          _kategoriOptions
+              .map(
+                (value) =>
+                    DropdownMenuItem<String>(value: value, child: Text(value)),
+              )
+              .toList(),
+      onChanged: (val) => setState(() => _kategori = val),
       validator: (value) => value == null ? 'Wajib dipilih' : null,
       decoration: InputDecoration(
         filled: true,
@@ -336,14 +329,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return DropdownButtonFormField<String>(
       value: _prioritas,
       items:
-          _prioritasOptions.map((String value) {
-            return DropdownMenuItem<String>(value: value, child: Text(value));
-          }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          _prioritas = newValue;
-        });
-      },
+          _prioritasOptions
+              .map(
+                (value) =>
+                    DropdownMenuItem<String>(value: value, child: Text(value)),
+              )
+              .toList(),
+      onChanged: (val) => setState(() => _prioritas = val),
       validator: (value) => value == null ? 'Wajib dipilih' : null,
       decoration: InputDecoration(
         filled: true,
@@ -481,9 +473,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
+          setState(() => _selectedIndex = index);
           final pages = [
             const AddTaskScreen(),
             const AllTasksScreen(),

@@ -4,11 +4,17 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'login/sign_in.dart';
 import 'theme/theme_provider.dart';
 import 'services/notification_service.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await NotificationService.initialize(); // Inisialisasi notifikasi WAJIB sebelum runApp
+  // ⏰ Inisialisasi timezone WAJIB sebelum zonedSchedule bisa jalan
+  tz.initializeTimeZones();
+  tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+
+  await NotificationService.initialize(); // Inisialisasi notifikasi
 
   await initializeDateFormatting('id_ID', null);
 

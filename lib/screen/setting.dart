@@ -66,7 +66,7 @@ class SettingsScreen extends StatelessWidget {
           }
 
           final userName = prefs.getString('name')!;
-          final userEmail = prefs.getString('email') ?? 'You@gmail.com';
+          final userEmail = prefs.getString('email') ?? 'you@email.com';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -89,7 +89,6 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 _buildLogoutSection(context, isDark),
-                const SizedBox(height: 40),
               ],
             ),
           );
@@ -106,61 +105,53 @@ class SettingsScreen extends StatelessWidget {
     Color cardColor,
     Color textColor,
   ) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: isDark ? Colors.blueGrey : Colors.blue[100],
+            child: Icon(
+              Icons.person,
+              color: isDark ? Colors.white : Colors.blue,
+              size: 24,
+            ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.blueGrey[700]! : Colors.blue[50]!,
-                  shape: BoxShape.circle,
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
                 ),
-                child: Icon(
-                  Icons.person,
-                  size: 24,
-                  color: isDark ? Colors.blue[200]! : Colors.blue[600]!,
+                const SizedBox(height: 4),
+                Text(
+                  userEmail,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: textColor.withOpacity(0.7),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userName,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      userEmail,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: textColor.withOpacity(0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.edit, color: Colors.blue),
-                onPressed: () => _showEditNameDialog(context, userName),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.blue),
+            onPressed: () => _showEditNameDialog(context, userName),
+          ),
+        ],
+      ),
     );
   }
 
@@ -176,46 +167,62 @@ class SettingsScreen extends StatelessWidget {
         color: cardColor,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.notifications_none, size: 24, color: textColor),
-          const SizedBox(width: 16),
-          Text('Notifikasi', style: TextStyle(fontSize: 16, color: textColor)),
-          const Spacer(),
-          FutureBuilder<bool>(
-            future: NotificationService.areNotificationsEnabled(),
-            builder: (context, snapshot) {
-              final enabled = snapshot.data ?? true;
-              return Switch(
-                value: enabled,
-                onChanged: (value) async {
-                  if (value) {
-                    await NotificationService.requestPermission();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Notifikasi diaktifkan'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  } else {
-                    await NotificationService.cancelAllNotifications();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Semua notifikasi dinonaktifkan'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
+          Row(
+            children: [
+              Icon(Icons.notifications_none, size: 24, color: textColor),
+              const SizedBox(width: 16),
+              Text(
+                'Notifikasi',
+                style: TextStyle(fontSize: 16, color: textColor),
+              ),
+              const Spacer(),
+              FutureBuilder<bool>(
+                future: NotificationService.areNotificationsEnabled(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const CircularProgressIndicator(strokeWidth: 2);
                   }
+                  final enabled = snapshot.data!;
+                  return Switch(
+                    value: enabled,
+                    onChanged: (value) async {
+                      if (value) {
+                        await NotificationService.requestPermission();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Notifikasi diaktifkan'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        );
+                      } else {
+                        await NotificationService.cancelAllNotifications();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Notifikasi dimatikan'),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    activeColor: Colors.blue,
+                  );
                 },
-                activeColor: Colors.blue,
-              );
-            },
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Aktifkan notifikasi agar kamu tidak melewatkan tugas penting!',
+            style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.75)),
           ),
         ],
       ),
@@ -224,12 +231,29 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildLogoutSection(BuildContext context, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Column(
         children: [
           const Divider(),
           const SizedBox(height: 16),
-          _buildLogoutButton(context, isDark),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _showLogoutConfirmation(context),
+              icon: Icon(Icons.logout, color: Colors.white),
+              label: const Text(
+                'Keluar',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red[600],
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -256,13 +280,6 @@ class SettingsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: cardColor,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
               ),
               child: Column(
                 children: [
@@ -277,22 +294,16 @@ class SettingsScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text(
                     'Silakan masukkan nama Anda untuk memulai',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
                       color: textColor.withOpacity(0.7),
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
                       onPressed:
                           () => _showEditNameDialog(
                             context,
@@ -300,6 +311,12 @@ class SettingsScreen extends StatelessWidget {
                             isFirstTime: true,
                           ),
                       child: const Text('Masukkan Nama'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -316,232 +333,71 @@ class SettingsScreen extends StatelessWidget {
     String currentName, {
     bool isFirstTime = false,
   }) async {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final isDark = themeProvider.currentTheme == ThemeMode.dark;
-    final textColor = isDark ? Colors.white : Colors.black;
-    final bgColor = isDark ? Colors.grey[800]! : Colors.white;
-
     final prefs = await SharedPreferences.getInstance();
-    final textController = TextEditingController(text: currentName);
+    final controller = TextEditingController(text: currentName);
 
     await showDialog(
       context: context,
       builder:
-          (context) => Dialog(
-            backgroundColor: bgColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          (context) => AlertDialog(
+            title: Text(isFirstTime ? 'Masukkan Nama Anda' : 'Ubah Nama'),
+            content: TextField(
+              controller: controller,
+              decoration: const InputDecoration(labelText: 'Nama'),
+              autofocus: true,
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isFirstTime ? 'Masukkan Nama Anda' : 'Ubah Nama',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: textColor,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: textController,
-                    decoration: InputDecoration(
-                      labelText: 'Nama',
-                      labelStyle: TextStyle(color: textColor.withOpacity(0.6)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: isDark ? Colors.grey[600]! : Colors.grey[400]!,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: isDark ? Colors.grey[600]! : Colors.grey[400]!,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Colors.blue,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    style: TextStyle(color: textColor),
-                    autofocus: true,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Batal',
-                          style: TextStyle(color: textColor),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () async {
-                          if (textController.text.trim().isNotEmpty) {
-                            await prefs.setString(
-                              'name',
-                              textController.text.trim(),
-                            );
-                            Navigator.pop(context);
-
-                            if (isFirstTime) {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const SettingsScreen(),
-                                ),
-                              );
-                            }
-
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text('Nama berhasil disimpan'),
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            );
-                          }
-                        },
-                        child: const Text('Simpan'),
-                      ),
-                    ],
-                  ),
-                ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (controller.text.trim().isNotEmpty) {
+                    await prefs.setString('name', controller.text.trim());
+                    Navigator.pop(context);
+                    if (isFirstTime) {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      );
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Nama berhasil disimpan')),
+                    );
+                  }
+                },
+                child: const Text('Simpan'),
+              ),
+            ],
           ),
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context, bool isDark) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDark ? Colors.red[800]! : Colors.red[600]!,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        onPressed: () => _showLogoutConfirmation(context),
-        icon: Icon(Icons.logout, color: Colors.white.withOpacity(0.9)),
-        label: const Text(
-          'Keluar',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
     );
   }
 
   Future<void> _showLogoutConfirmation(BuildContext context) async {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final isDark = themeProvider.currentTheme == ThemeMode.dark;
-    final bgColor = isDark ? const Color(0xFF424242) : Colors.white;
-    final textColor = isDark ? Colors.white : Colors.black87;
-
     return showDialog(
       context: context,
       builder:
-          (context) => Dialog(
-            backgroundColor: bgColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+          (_) => AlertDialog(
+            title: const Text('Konfirmasi Keluar'),
+            content: const Text(
+              'Apakah Anda yakin ingin keluar dari akun ini?',
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.warning_rounded,
-                        color: Colors.orange[400],
-                        size: 28,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Konfirmasi Keluar',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Anda akan keluar dari akun Anda. Yakin ingin melanjutkan?',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: textColor.withOpacity(0.8),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                        child: Text(
-                          'Batal',
-                          style: TextStyle(color: textColor, fontSize: 15),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: () async {
-                          Navigator.pop(context);
-                          await _performLogout(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[600]!,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Ya, Keluar',
-                          style: TextStyle(color: Colors.white, fontSize: 15),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await _performLogout(context);
+                },
+                child: const Text('Ya, Keluar'),
+              ),
+            ],
           ),
     );
   }
@@ -554,30 +410,16 @@ class SettingsScreen extends StatelessWidget {
       if (token != null) {
         await ApiService.logoutUser(token);
       }
-      // Cancel semua notifikasi saat logout
       await NotificationService.cancelAllNotifications();
-      await _clearLocalDataAndNavigate(context);
-    } catch (e) {
-      await NotificationService.cancelAllNotifications();
-      await _clearLocalDataAndNavigate(context);
-    }
-  }
+    } catch (_) {}
 
-  Future<void> _clearLocalDataAndNavigate(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
 
     if (context.mounted) {
       Navigator.pushReplacementNamed(context, '/login');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Anda telah logout'),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Anda telah logout')));
     }
   }
 }

@@ -4,26 +4,34 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'login/sign_in.dart';
 import 'theme/theme_provider.dart';
 import 'services/notification_service.dart';
-import 'package:timezone/data/latest.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
+
+final GlobalKey<NavigatorState> navigatorKey = NotificationService.navigatorKey;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ⏰ Inisialisasi timezone WAJIB sebelum zonedSchedule bisa jalan
-  tz.initializeTimeZones();
-  tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+  // Inisialisasi notifikasi (timezone otomatis)
+  await NotificationService.initialize();
 
-  await NotificationService.initialize(); // Inisialisasi notifikasi
-
-  await initializeDateFormatting('id_ID', null);
-
+  // Minta izin exact alarm SEKALI di awal aplikasi (gunakan context navigatorKey)
+  // Tunggu hingga navigatorKey punya context (harus setelah runApp)
   runApp(
     ChangeNotifierProvider(
       create: (_) => ThemeProvider(),
       child: const MyApp(),
     ),
   );
+
+  // Tunggu beberapa microseconds agar context tersedia
+  Future.delayed(const Duration(milliseconds: 200), () async {
+    final context = navigatorKey.currentState?.overlay?.context;
+    if (context != null) {
+      await NotificationService.requestExactAlarmPermissionWithDialog(context);
+    }
+  });
+
+  // Inisialisasi locale tanggal Indonesia
+  await initializeDateFormatting('id_ID', null);
 }
 
 class MyApp extends StatelessWidget {
@@ -39,121 +47,10 @@ class MyApp extends StatelessWidget {
           theme: ThemeData.light(),
           darkTheme: ThemeData.dark(),
           themeMode: themeProvider.currentTheme,
-          navigatorKey: navigatorKey, // Untuk notifikasi dan dialog global
-          home: OnboardingScreen(),
+          navigatorKey: navigatorKey,
+          home: const SignInPage(),
         );
       },
-    );
-  }
-}
-
-class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(height: size.height * 0.1),
-          Text(
-            'Selamat Datang',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF333333),
-              fontSize: 34,
-              fontFamily: 'Signika',
-              fontWeight: FontWeight.w700,
-              height: 1.26,
-              letterSpacing: -0.68,
-            ),
-          ),
-          Text(
-            'Di Aplikasi Dailist',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Color(0xFF333333),
-              fontSize: 34,
-              fontFamily: 'Signika',
-              fontWeight: FontWeight.w700,
-              height: 1.26,
-              letterSpacing: -0.68,
-            ),
-          ),
-          SizedBox(height: size.height * 0.05),
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                width: size.width * 0.45,
-                height: size.width * 0.45,
-                decoration: BoxDecoration(
-                  color: Color(0xFFEDF7FE),
-                  shape: BoxShape.circle,
-                ),
-              ),
-              SizedBox(
-                width: size.width * 0.35,
-                height: size.width * 0.35,
-                child: Image.asset('assets/dailist.png', fit: BoxFit.contain),
-              ),
-            ],
-          ),
-          SizedBox(height: size.height * 0.04),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: size.width * 0.1),
-            child: Text(
-              'Yuk, atur tugas-tugasmu biar\nkeseharianmu makin terorganisir dan\nproduktif.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF939393),
-                fontSize: 18,
-                fontFamily: 'Signika',
-                fontWeight: FontWeight.w400,
-                height: 1.24,
-                letterSpacing: -0.36,
-              ),
-            ),
-          ),
-          Expanded(child: SizedBox()),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: size.width * 0.08),
-            child: SizedBox(
-              width: double.infinity,
-              height: size.height * 0.07,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => SignInPage()),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF2196F3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(50),
-                  ),
-                ),
-                child: Text(
-                  'Di List Yuk!',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontFamily: 'Signika',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: size.height * 0.03),
-        ],
-      ),
     );
   }
 }

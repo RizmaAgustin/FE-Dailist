@@ -4,18 +4,26 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
 class NotificationService {
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  static Future<void> initialize() async {
+  /// Inisialisasi timezone otomatis sesuai device
+  static Future<void> configureLocalTimeZone() async {
     tz.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
+    final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+    tz.setLocalLocation(tz.getLocation(timeZoneName));
+    print('🕒 Timezone lokal: $timeZoneName');
+  }
+
+  static Future<void> initialize() async {
+    await configureLocalTimeZone();
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     final iosInit = DarwinInitializationSettings(
@@ -23,7 +31,6 @@ class NotificationService {
       requestBadgePermission: true,
       requestSoundPermission: true,
     );
-
     final settings = InitializationSettings(android: androidInit, iOS: iosInit);
 
     await _notificationsPlugin.initialize(
@@ -35,13 +42,13 @@ class NotificationService {
       },
     );
 
+    // Channel untuk reminder
     const AndroidNotificationChannel taskChannel = AndroidNotificationChannel(
       'task_channel_id',
       'Task Notifications',
       description: 'Pengingat tugas dan deadline',
       importance: Importance.max,
     );
-
     final androidImplementation =
         _notificationsPlugin
             .resolvePlatformSpecificImplementation<
@@ -105,7 +112,6 @@ class NotificationService {
             ],
           ),
     );
-
     if (shouldOpen == true) {
       await openExactAlarmSettings();
     }
@@ -138,17 +144,12 @@ class NotificationService {
     required DateTime scheduledDateTime,
     BuildContext? context,
   }) async {
-    if (context != null) {
-      await requestExactAlarmPermissionWithDialog(context);
-    }
-
+    // JANGAN panggil requestExactAlarmPermissionWithDialog di sini!
     final tz.TZDateTime scheduledDate = tz.TZDateTime.from(
       scheduledDateTime,
       tz.local,
     );
-
     print('📆 Menjadwalkan notifikasi: $title pada $scheduledDate');
-
     try {
       await _notificationsPlugin.zonedSchedule(
         id,
@@ -209,6 +210,7 @@ class NotificationService {
   }
 
   static Future<bool> areNotificationsEnabled() async {
-    return true; // Bisa ditambahkan pengecekan lebih lanjut kalau perlu
+    // Bisa tambahkan pengecekan lebih lanjut kalau perlu
+    return true;
   }
 }

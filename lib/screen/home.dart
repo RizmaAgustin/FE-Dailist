@@ -11,8 +11,8 @@ import 'add_task.dart';
 import 'all_task.dart';
 import 'calender.dart';
 import 'setting.dart';
-import '../services/api_services.dart';
 import '../services/notification_service.dart';
+import '../services/api_services.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -168,8 +168,11 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
       final result = await ApiService.fetchTasks(token: token);
       if (result['status'] == 200) {
         final List<dynamic> data = result['body'];
+        List<Task> loadedTasks =
+            data.map((json) => Task.fromJson(json)).toList();
+
         setState(() {
-          _tasks = data.map((json) => Task.fromJson(json)).toList();
+          _tasks = loadedTasks;
           _isLoading = false;
         });
       } else {
@@ -247,6 +250,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         title: wasCompleted ? 'Tugas Ditandai Belum Selesai' : 'Tugas Selesai',
         body: 'Tugas: ${task.title}',
       );
+      await _loadTasks();
     } catch (e) {
       setState(() {
         _tasks =
@@ -378,7 +382,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
     bool isSelected = false,
   }) {
     return SizedBox(
-      width: 160,
+      width: 140,
+      height: 140,
       child: GestureDetector(
         onTap: () {
           setState(() {
@@ -397,6 +402,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   icon,
@@ -411,6 +417,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     fontSize: 16,
                     color: isSelected ? Colors.blue : textColor,
                   ),
+                  textAlign: TextAlign.center,
                 ),
               ],
             ),
@@ -532,54 +539,79 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Kategori',
-                            style: TextStyle(
-                              fontSize: 20.0,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 0),
+                            child: Text(
+                              'Kategori',
+                              style: TextStyle(
+                                fontSize: 20.0,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 16.0),
-                          Center(
-                            child: Wrap(
-                              spacing: 16.0,
-                              runSpacing: 16.0,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                _buildCategoryCard(
-                                  'Kerja',
-                                  categoryCounts['Kerja']!,
-                                  Icons.work,
-                                  cardColor,
-                                  textColor,
-                                  isSelected: _selectedCategory == 'Kerja',
-                                ),
-                                _buildCategoryCard(
-                                  'Pribadi',
-                                  categoryCounts['Pribadi']!,
-                                  Icons.person,
-                                  cardColor,
-                                  textColor,
-                                  isSelected: _selectedCategory == 'Pribadi',
-                                ),
-                                _buildCategoryCard(
-                                  'Belajar',
-                                  categoryCounts['Belajar']!,
-                                  Icons.book,
-                                  cardColor,
-                                  textColor,
-                                  isSelected: _selectedCategory == 'Belajar',
-                                ),
-                                _buildCategoryCard(
-                                  'Semua',
-                                  categoryCounts['Semua']!,
-                                  Icons.folder,
-                                  cardColor,
-                                  textColor,
-                                  isSelected: _selectedCategory == 'Semua',
-                                ),
-                              ],
+                          // geser grid kategori lebih naik
+                          Transform.translate(
+                            offset: const Offset(0, -12),
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                double gridMaxWidth =
+                                    constraints.maxWidth > 320
+                                        ? 320
+                                        : constraints.maxWidth;
+                                return Center(
+                                  child: SizedBox(
+                                    width: gridMaxWidth,
+                                    child: GridView.count(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: 16,
+                                      childAspectRatio: 1,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      children: [
+                                        _buildCategoryCard(
+                                          'Kerja',
+                                          categoryCounts['Kerja']!,
+                                          Icons.work,
+                                          cardColor,
+                                          textColor,
+                                          isSelected:
+                                              _selectedCategory == 'Kerja',
+                                        ),
+                                        _buildCategoryCard(
+                                          'Pribadi',
+                                          categoryCounts['Pribadi']!,
+                                          Icons.person,
+                                          cardColor,
+                                          textColor,
+                                          isSelected:
+                                              _selectedCategory == 'Pribadi',
+                                        ),
+                                        _buildCategoryCard(
+                                          'Belajar',
+                                          categoryCounts['Belajar']!,
+                                          Icons.book,
+                                          cardColor,
+                                          textColor,
+                                          isSelected:
+                                              _selectedCategory == 'Belajar',
+                                        ),
+                                        _buildCategoryCard(
+                                          'Semua',
+                                          categoryCounts['Semua']!,
+                                          Icons.folder,
+                                          cardColor,
+                                          textColor,
+                                          isSelected:
+                                              _selectedCategory == 'Semua',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           const SizedBox(height: 24.0),

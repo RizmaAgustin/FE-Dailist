@@ -151,29 +151,32 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         isCompleted: _isCompleted,
       );
 
-      // ✅ Tambahkan pemanggilan izin dan penjadwalan notifikasi
-      if ((result['status'] == 200 || result['status'] == 201) &&
-          _aturPengingat) {
-        final notifId =
-            widget.taskToEdit?.id ??
-            DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final notifId =
+          widget.taskToEdit?.id ??
+          DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-        // 🛑 Minta izin exact alarm dulu
-        await NotificationService.requestExactAlarmPermissionWithDialog(
-          context,
-        );
-
-        // 🟢 Jadwalkan notifikasi
-        await NotificationService.scheduleNotification(
-          id: notifId,
-          title: 'Pengingat Tugas',
-          body:
-              _catatanController.text.isNotEmpty
-                  ? '${_judulController.text} - ${_catatanController.text}'
-                  : _judulController.text,
-          scheduledDateTime: deadline,
-          context: context, // ini penting!
-        );
+      if ((result['status'] == 200 || result['status'] == 201)) {
+        // Jika pengingat aktif, batalkan notifikasi lama lalu jadwalkan baru
+        if (_aturPengingat) {
+          // Batalkan notifikasi lama jika edit
+          if (widget.taskToEdit != null) {
+            await NotificationService.cancelNotification(widget.taskToEdit!.id);
+          }
+          // Tidak perlu requestExactAlarmPermissionWithDialog(context) DI SINI!
+          await NotificationService.scheduleNotification(
+            id: notifId,
+            title: 'Pengingat Tugas',
+            body:
+                _catatanController.text.isNotEmpty
+                    ? '${_judulController.text} - ${_catatanController.text}'
+                    : _judulController.text,
+            scheduledDateTime: deadline,
+            context: context,
+          );
+        } else if (widget.taskToEdit != null) {
+          // Jika edit dan pengingat dimatikan, batalkan notifikasi lama
+          await NotificationService.cancelNotification(widget.taskToEdit!.id);
+        }
       }
 
       setState(() => _isLoading = false);

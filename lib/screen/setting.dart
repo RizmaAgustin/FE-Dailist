@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme_provider.dart';
 import '../services/api_services.dart';
 import '../services/notification_service.dart';
+import '../login/sign_in.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -112,6 +113,8 @@ class SettingsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start, // <--- Ubah di sini (center -> start)
         children: [
           CircleAvatar(
             radius: 24,
@@ -122,25 +125,31 @@ class SettingsScreen extends StatelessWidget {
               size: 24,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Nama
                 Text(
                   userName,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: textColor,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  userEmail,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: textColor.withOpacity(0.7),
+                // Email di bawah nama
+                Padding(
+                  padding: const EdgeInsets.only(top: 2.0),
+                  child: Text(
+                    userEmail,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textColor.withOpacity(0.7),
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -227,7 +236,7 @@ class SettingsScreen extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _showLogoutConfirmation(context),
-              icon: Icon(Icons.logout, color: Colors.white),
+              icon: const Icon(Icons.logout, color: Colors.white),
               label: const Text(
                 'Keluar',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -403,7 +412,12 @@ class SettingsScreen extends StatelessWidget {
     await prefs.clear();
 
     if (context.mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      // Go to login page after logout
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const SignInPage()),
+        (route) => false,
+      );
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Anda telah logout')));

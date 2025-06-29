@@ -89,33 +89,34 @@ class NotificationService {
     }
   }
 
-  static Future<void> requestExactAlarmPermissionWithDialog(
-    BuildContext context,
-  ) async {
-    final shouldOpen = await showDialog<bool>(
-      context: context,
-      builder:
-          (_) => AlertDialog(
-            title: const Text('Izin Notifikasi Presisi'),
-            content: const Text(
-              'Untuk mengingatkan tugas tepat waktu, aplikasi perlu izin notifikasi presisi. Buka pengaturan sekarang?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Tidak'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Buka'),
-              ),
-            ],
-          ),
-    );
-    if (shouldOpen == true) {
-      await openExactAlarmSettings();
-    }
-  }
+  // HAPUS DIALOG IZIN EXACT ALARM
+  // static Future<void> requestExactAlarmPermissionWithDialog(
+  //   BuildContext context,
+  // ) async {
+  //   final shouldOpen = await showDialog<bool>(
+  //     context: context,
+  //     builder:
+  //         (_) => AlertDialog(
+  //           title: const Text('Izin Notifikasi Presisi'),
+  //           content: const Text(
+  //             'Untuk mengingatkan tugas tepat waktu, aplikasi perlu izin notifikasi presisi. Buka pengaturan sekarang?',
+  //           ),
+  //           actions: [
+  //             TextButton(
+  //               onPressed: () => Navigator.pop(context, false),
+  //               child: const Text('Tidak'),
+  //             ),
+  //             ElevatedButton(
+  //               onPressed: () => Navigator.pop(context, true),
+  //               child: const Text('Buka'),
+  //             ),
+  //           ],
+  //         ),
+  //   );
+  //   if (shouldOpen == true) {
+  //     await openExactAlarmSettings();
+  //   }
+  // }
 
   static void _showNotificationDialog(String payload) {
     final context = navigatorKey.currentState?.overlay?.context;

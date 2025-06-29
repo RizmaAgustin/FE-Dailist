@@ -301,7 +301,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 'Generated on: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
               ),
               pw.SizedBox(height: 20),
-              pw.Table.fromTextArray(
+              pw.TableHelper.fromTextArray(
                 context: context,
                 border: pw.TableBorder.all(),
                 headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -391,12 +391,13 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
           });
         },
         child: Card(
-          color: isSelected ? Colors.blue.withOpacity(0.2) : cardColor,
+          color:
+              isSelected ? Colors.blue.withValues(alpha: 0.2 * 255) : cardColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
             side:
                 isSelected
-                    ? BorderSide(color: Colors.blue, width: 2)
+                    ? const BorderSide(color: Colors.blue, width: 2)
                     : BorderSide.none,
           ),
           child: Padding(
@@ -524,7 +525,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                         children: [
                           Text(
                             _errorMessage,
-                            style: TextStyle(color: Colors.red),
+                            style: const TextStyle(color: Colors.red),
                           ),
                           const SizedBox(height: 16),
                           ElevatedButton(
@@ -648,8 +649,7 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                 title: task.title,
                                 time: task.formattedTime,
                                 date: task.formattedDate,
-                                dueDate:
-                                    task.dueDate, // penting untuk fitur merah
+                                dueDate: task.dueDate,
                                 textColor: textColor,
                                 secondaryTextColor: Colors.blue,
                                 isCompleted: task.isCompleted,

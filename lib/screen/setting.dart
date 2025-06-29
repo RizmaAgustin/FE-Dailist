@@ -167,62 +167,49 @@ class SettingsScreen extends StatelessWidget {
         color: cardColor,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(Icons.notifications_none, size: 24, color: textColor),
-              const SizedBox(width: 16),
-              Text(
-                'Notifikasi',
-                style: TextStyle(fontSize: 16, color: textColor),
-              ),
-              const Spacer(),
-              FutureBuilder<bool>(
-                future: NotificationService.areNotificationsEnabled(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const CircularProgressIndicator(strokeWidth: 2);
+          Icon(Icons.notifications_none, size: 24, color: textColor),
+          const SizedBox(width: 16),
+          Text('Notifikasi', style: TextStyle(fontSize: 16, color: textColor)),
+          const Spacer(),
+          FutureBuilder<bool>(
+            future: NotificationService.areNotificationsEnabled(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const CircularProgressIndicator(strokeWidth: 2);
+              }
+              final enabled = snapshot.data!;
+              return Switch(
+                value: enabled,
+                onChanged: (value) async {
+                  if (value) {
+                    await NotificationService.requestPermission();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Notifikasi diaktifkan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  } else {
+                    await NotificationService.cancelAllNotifications();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Notifikasi dimatikan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
                   }
-                  final enabled = snapshot.data!;
-                  return Switch(
-                    value: enabled,
-                    onChanged: (value) async {
-                      if (value) {
-                        await NotificationService.requestPermission();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Notifikasi diaktifkan'),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      } else {
-                        await NotificationService.cancelAllNotifications();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Notifikasi dimatikan'),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    activeColor: Colors.blue,
-                  );
                 },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Aktifkan notifikasi agar kamu tidak melewatkan tugas penting!',
-            style: TextStyle(fontSize: 14, color: textColor.withOpacity(0.75)),
+                activeColor: Colors.blue,
+              );
+            },
           ),
         ],
       ),

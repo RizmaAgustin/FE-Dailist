@@ -550,7 +550,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                               ),
                             ),
                           ),
-                          // geser grid kategori lebih naik
                           Transform.translate(
                             offset: const Offset(0, -12),
                             child: LayoutBuilder(
@@ -649,6 +648,8 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                                 title: task.title,
                                 time: task.formattedTime,
                                 date: task.formattedDate,
+                                dueDate:
+                                    task.dueDate, // penting untuk fitur merah
                                 textColor: textColor,
                                 secondaryTextColor: Colors.blue,
                                 isCompleted: task.isCompleted,
@@ -700,6 +701,7 @@ class TaskItem extends StatelessWidget {
   final String title;
   final String time;
   final String date;
+  final DateTime? dueDate;
   final Color textColor;
   final Color secondaryTextColor;
   final bool isCompleted;
@@ -710,6 +712,7 @@ class TaskItem extends StatelessWidget {
     required this.title,
     required this.time,
     required this.date,
+    required this.dueDate,
     required this.textColor,
     required this.secondaryTextColor,
     required this.isCompleted,
@@ -722,6 +725,16 @@ class TaskItem extends StatelessWidget {
         Theme.of(context).brightness == Brightness.dark
             ? Colors.grey[800]!
             : Colors.white;
+
+    final bool isDeadlinePassed =
+        dueDate != null && dueDate!.isBefore(DateTime.now()) && !isCompleted;
+
+    final Color titleColor = isDeadlinePassed ? Colors.red : textColor;
+    final Color dateColor = isDeadlinePassed ? Colors.red : secondaryTextColor;
+    final Color timeColor =
+        isDeadlinePassed
+            ? Colors.red
+            : (isCompleted ? secondaryTextColor : Colors.blue);
 
     return GestureDetector(
       onTap: onTap,
@@ -751,14 +764,14 @@ class TaskItem extends StatelessWidget {
                       title,
                       style: TextStyle(
                         fontSize: 16,
-                        color: textColor,
+                        color: titleColor,
                         decoration:
                             isCompleted ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     Text(
                       date,
-                      style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                      style: TextStyle(fontSize: 12, color: dateColor),
                     ),
                   ],
                 ),
@@ -768,7 +781,7 @@ class TaskItem extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: isCompleted ? secondaryTextColor : Colors.blue,
+                  color: timeColor,
                 ),
               ),
             ],

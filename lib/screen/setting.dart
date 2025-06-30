@@ -82,11 +82,10 @@ class SettingsScreen extends StatelessWidget {
                   textColor,
                 ),
                 const SizedBox(height: 24),
-                _buildNotificationSection(
-                  isDark,
-                  cardColor,
-                  textColor,
-                  context,
+                NotificationSection(
+                  isDark: isDark,
+                  cardColor: cardColor,
+                  textColor: textColor,
                 ),
                 const SizedBox(height: 24),
                 _buildLogoutSection(context, isDark),
@@ -113,8 +112,7 @@ class SettingsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start, // <--- Ubah di sini (center -> start)
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 24,
@@ -130,7 +128,6 @@ class SettingsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Nama
                 Text(
                   userName,
                   style: TextStyle(
@@ -140,7 +137,6 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
-                // Email di bawah nama
                 Padding(
                   padding: const EdgeInsets.only(top: 2.0),
                   child: Text(
@@ -158,67 +154,6 @@ class SettingsScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.blue),
             onPressed: () => _showEditNameDialog(context, userName),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationSection(
-    bool isDark,
-    Color cardColor,
-    Color textColor,
-    BuildContext context,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.notifications_none, size: 24, color: textColor),
-          const SizedBox(width: 16),
-          Text('Notifikasi', style: TextStyle(fontSize: 16, color: textColor)),
-          const Spacer(),
-          FutureBuilder<bool>(
-            future: NotificationService.areNotificationsEnabled(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const CircularProgressIndicator(strokeWidth: 2);
-              }
-              final enabled = snapshot.data!;
-              return Switch(
-                value: enabled,
-                onChanged: (value) async {
-                  if (value) {
-                    await NotificationService.requestPermission();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Notifikasi diaktifkan'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  } else {
-                    await NotificationService.cancelAllNotifications();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Notifikasi dimatikan'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    );
-                  }
-                },
-                activeColor: Colors.blue,
-              );
-            },
           ),
         ],
       ),
@@ -412,7 +347,6 @@ class SettingsScreen extends StatelessWidget {
     await prefs.clear();
 
     if (context.mounted) {
-      // Go to login page after logout
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const SignInPage()),
@@ -422,5 +356,99 @@ class SettingsScreen extends StatelessWidget {
         context,
       ).showSnackBar(const SnackBar(content: Text('Anda telah logout')));
     }
+  }
+}
+
+// ---- NOTIFICATION SECTION STATEFUL ----
+
+class NotificationSection extends StatefulWidget {
+  final bool isDark;
+  final Color cardColor;
+  final Color textColor;
+  const NotificationSection({
+    required this.isDark,
+    required this.cardColor,
+    required this.textColor,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  State<NotificationSection> createState() => _NotificationSectionState();
+}
+
+class _NotificationSectionState extends State<NotificationSection> {
+  late Future<bool> _enabledFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _enabledFuture = NotificationService.areNotificationsEnabled();
+  }
+
+  void _refresh() {
+    setState(() {
+      _enabledFuture = NotificationService.areNotificationsEnabled();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: widget.cardColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.notifications_none, size: 24, color: widget.textColor),
+          const SizedBox(width: 16),
+          Text(
+            'Notifikasi',
+            style: TextStyle(fontSize: 16, color: widget.textColor),
+          ),
+          const Spacer(),
+          FutureBuilder<bool>(
+            future: _enabledFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const CircularProgressIndicator(strokeWidth: 2);
+              }
+              final enabled = snapshot.data!;
+              return Switch(
+                value: enabled,
+                onChanged: (value) async {
+                  if (value) {
+                    await NotificationService.requestPermission();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Notifikasi diaktifkan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  } else {
+                    await NotificationService.cancelAllNotifications();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Notifikasi dimatikan'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  }
+                  _refresh(); // refresh status
+                },
+                activeColor: Colors.blue,
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
